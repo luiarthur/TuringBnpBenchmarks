@@ -21,6 +21,39 @@ probability for a variety of Bayesian nonparametric (BNP) models, which are a
 class of models that provide a much modeling flexibility and often allow model
 complexity to increase with data size.
 
+To address the need for a more systematic approach for comparing the
+performance of Turing and various PPLs (STAN, Pyro, nimble, TensorFlow
+probability) under common Bayesian nonparametric (BNP) models,  which are a
+class of models that provide a great deal of modeling flexibility and allow the
+number of model parameters, and thus model complexity, to increase with the
+size of the data. The following models will be implemented (if possible) and
+timed (both compile times and execution times) in the various PPLs (links to
+minimum working examples will be provided):
+
+- Sampling (and variational) algorithms for Dirichlet process (DP) Gaussian /
+  non-Gaussian mixtures for different sample sizes
+    - E.g. Sampling via Chinese restaurant process (CRP) representations
+      (including collapsed Gibbs, sequential Monte Carlo, particle Gibbs),
+      HMC/NUTS for stick-breaking (SB) constructions, variational inference for
+      stick-breaking construction.
+    - **Note**: DPs are a popular choice of BNP models typically used when density
+      estimation is of interest. They are also a popular prior for infinite
+      mixture models, where the number of clusters are not known in advance.
+- Sampling (and variational) algorithms for Pitman-Yor process (PYP) Gaussian /
+  non-Gaussian mixtures for different sample sizes
+    - E.g. Sampling via generalized CRP representations (including collapsed
+      Gibbs, sequential Monte Carlo, particle Gibbs), HMC/NUTS for
+      stick-breaking (SB) constructions, variational inference for
+      stick-breaking construction.
+    - **Note**: PYPs are generalizations of DPs. That is, DPs are a special
+      case of PYPs. PYPs exhibit a power-law behavior, which enables them to
+      better model heavy-tailed distributions.
+- PYP / DP hierarchical models. Specific model to be determined.
+
+In addition, the effective sample size and inference speed of a standardised
+setup, e.g. HMC in truncated stick-breaking DP mixture models, for the
+respective PPLs will be measured.
+
 ## What this repo contains
 This repository includes (or will include) tables and other visualizations
 that compare the (compile and execution) speed and features of various PPLs
