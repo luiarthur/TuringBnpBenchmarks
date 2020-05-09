@@ -1,0 +1,9 @@
+# Site settings
+title: Arthur Lui
+email: luiarthur@gmail.com
+description: "Just a test"
+url: "http://luiarthur.github.io/test_gh_pages"
+
+# Build settings
+markdown: kramdown
+permalink: /:title
