@@ -4,7 +4,7 @@ layout: page
 
 # This is the home page!
 
-Check out this <a href="{{site.baseurl}}/test-page.html"> test page </a>!
+Check out this <a href="{{site.baseurl}}/test-page.html"> test page</a>!
 It is way more interesting. 
 
 <hr>
