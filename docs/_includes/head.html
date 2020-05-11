@@ -1,4 +1,18 @@
 <head>
+    {% if site.google_analytics %}
+      <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+      <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ site.google_analytics }}');
+      </script>
+    {% endif %}
+
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,maximum-scale=2">
+
     <title>{% if page.title %}{{ page.title }} - {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
 
     <link rel="canonical" href="{{ page.url | replace:'index.html','' | prepend: site.baseurl | prepend: site.url }}">
@@ -9,10 +23,42 @@
     <link rel="stylesheet" href="{{ "/assets/css/rouge-github.css" | prepend: site.baseurl }}">
 
     <!-- jQuery -->
-    <script src="/assets/js/jquery.min.js"></script>
+    <script src="{{ "/assets/js/jquery.min.js" | prepend: site.baseurl}}"></script>
     <!-- Bootstrap Core JavaScript -->
-    <script src="/assets/js/bootstrap.min.js"></script>
+    <script src="{{ "/assets/js/bootstrap.min.js" | prepend: site.baseurl}}"></script>
 
     <!-- Regular Disquss -->
-    <script src="/assets/js/disqus.js"></script>
+    <script src="{{ "/assets/js/disqus.js" | prepend: site.baseurl}}"></script>
+
+    {% if page.math %}
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: {
+          equationNumbers: {
+            autoNumber: "AMS"
+          },
+          Macros: {
+            argmin: ["{\\underset{#1}{\\operatorname{argmin}}}",1],
+            argmax: ["{\\underset{#1}{\\operatorname{argmax}}}",1],
+            KL: "\\operatorname{KL}",
+            E: "\\operatorname{E}",
+            elbo: "\\operatorname{ELBO}",
+            p: ["{\\left(#1\\right)}",1],
+            bk: ["{\\left[#1\\right]}",1],
+            bc: ["{\\{#1\\}}",1],
+            abs: ["{\\left|#1\\right|}",1],
+            ds: [" \\displaystyle "]
+          }
+        },
+        tex2jax: {
+          inlineMath: [ ['$','$'] ],
+          displayMath: [ ['$$','$$'] ],
+          processEscapes: true,
+        }
+      });
+    </script>
+    <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"> </script>
+    {% endif %}
+
+    {% seo %}
 </head>
