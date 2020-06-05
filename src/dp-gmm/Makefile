@@ -1,0 +1,36 @@
+all: script 
+
+execute-all-notebooks:
+	for fname in `ls notebooks/*.ipynb`; do \
+		jupyter nbconvert \
+		--to=notebook \
+		--execute $$fname \
+		--ExecutePreprocessor.timeout=None \
+		--inplace; \
+		done
+
+# Provide argument `NB=<path-to-nb>`
+execute-notebook:
+		jupyter nbconvert \
+			--to=notebook \
+			--execute $(NB) \
+			--ExecutePreprocessor.timeout=None \
+			--inplace \
+
+script:
+	mkdir -p scripts
+	for fname in `ls notebooks/*.ipynb`; do \
+		jupyter-nbconvert $$fname \
+		--to=script --output-dir=scripts/; \
+		done
+
+html:
+	mkdir -p html
+	for fname in `ls notebooks/*.ipynb`; do \
+		jupyter-nbconvert $$fname \
+		--to=html --template=basic \
+		--output-dir=html --template=basic \
+		--HTMLExporter.anchor_link_text=' ' \
+		--TemplateExporter.exclude_input_prompt=True; \
+		done
+

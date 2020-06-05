@@ -61,7 +61,7 @@ that compare the (compile and execution) speed and features of various PPLs
 working examples (MWEs) for each implementation. Blog posts describing the
 benchmarks will also be included.
 
-## Hardware
+## Software / Hardware
 All experiments for this project were done in an [c5.xlarge][2] AWS Spot
 Instance. As of this writing, here are the specs for this instance:
 
@@ -70,6 +70,9 @@ Instance. As of this writing, here are the specs for this instance:
 - Storage: EBS only
 - Network Bandwidth: Up to 10 Gbps
 - EBS Bandwidth: Up to 4750 Mbps
+
+The following software was used:
+- Julia-v1.4.1. See `Project.toml` and `Manifest.tomal` for more info.
 
 [1]: https://summerofcode.withgoogle.com/projects/#5861616765108224
 [2]: https://aws.amazon.com/ec2/instance-types/c5/
