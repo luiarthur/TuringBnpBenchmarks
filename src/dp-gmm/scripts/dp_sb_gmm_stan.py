@@ -80,7 +80,7 @@ with open(path_to_data) as f:
 get_ipython().run_line_magic('time', 'sm = pystan.StanModel(model_code=model)')
 
 
-# In[65]:
+# In[6]:
 
 
 # Create data dictionary.
@@ -96,13 +96,13 @@ nsamples = 500
 niters = burn + nsamples
 
 
-# In[67]:
+# In[7]:
 
 
-get_ipython().run_cell_magic('time', '', "\n# Sample from posterior via NUTS: 1m 57s\n# fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1)\n\n# Sample from posterior via HMC: 53s\n# NOTE: num_leapfrog = int_time / stepsize.\nfit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n                  algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
+get_ipython().run_cell_magic('time', '', "\n# Sample from posterior via NUTS: 1m 57s\nfit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1)\n\n# Sample from posterior via HMC: 53s\n# NOTE: num_leapfrog = int_time / stepsize.\n# fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n#                   algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
-# In[58]:
+# In[8]:
 
 
 def plot_param_post(param_name, param_full_name, figsize=(12, 4)):
@@ -123,25 +123,25 @@ def plot_param_post(param_name, param_full_name, figsize=(12, 4)):
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[59]:
+# In[9]:
 
 
 plot_param_post('eta', 'mixture weights (eta)')
 
 
-# In[60]:
+# In[10]:
 
 
 plot_param_post('mu', 'mixture means (mu)')
 
 
-# In[61]:
+# In[11]:
 
 
 plot_param_post('sigma', 'mixture scales (sigma)')
 
 
-# In[62]:
+# In[12]:
 
 
 # Plot trace of log likelihood (up to proportionality constant)
@@ -151,7 +151,7 @@ plt.ylabel("Log likelihood (scaled)");
 plt.title('Trace plot of log likelihood (scaled)');
 
 
-# In[63]:
+# In[13]:
 
 
 # Plot distribution of alpha

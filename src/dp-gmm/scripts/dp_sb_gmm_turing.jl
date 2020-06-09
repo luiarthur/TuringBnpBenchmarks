@@ -1,3 +1,6 @@
+import Dates
+println("Last updated: ", Dates.now(), " (PT)")
+
 # Load environment
 import Pkg; Pkg.activate("../../../")
 
@@ -5,15 +8,13 @@ import Pkg; Pkg.activate("../../../")
 using Turing
 using Distributions
 using JSON3
-using CSV
 using PyPlot
-const plt = PyPlot.plt
 import Random
 import StatsBase: countmap
 include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
 # DP GMM model under stick-breaking construction
-@model dp_gmm_sb(y, K) = begin
+@time @model dp_gmm_sb(y, K) = begin
     nobs = length(y)
 
     mu ~ filldist(Normal(0, 3), K)
@@ -44,42 +45,53 @@ data = let
     JSON3.read(x, Dict{Symbol, Vector{Any}})
 end
 
+# Convert data to vector of floats
+y = Float64.(data[:y]);
+
 # Visualize data
-plt.hist(data[:y], bins=50, density=true)
+plt.hist(y, bins=50, density=true)
 plt.xlabel("y")
 plt.ylabel("density")
 plt.title("Histogram of data");
 
-# Convert data to vector of d# Set random seed for reproducibility
+# Fit DP-SB-GMM
+
+# Set random seed for reproducibility
 Random.seed!(0);
-
-y = Float64.(data[:y])
-
-# Fit Model (DP-SB-GMM)
-iterations = 500
-burn = 500
-numcomponents = 10
-stepsize = 0.01
-nleapfrog = floor(Int, 1 / stepsize)
-
-# HMC
-# Compile time approx. 32s.
-# Run time approx. 70s.
-# @time chain = sample(dp_gmm_sb(y, numcomponents), 
-#                      HMC(stepsize, nleapfrog),
-#                      iterations + burn)
 
 # NUTS
 # Compile time approx. 11s
 # Run time approx. 244s
 # Slower, but works a little better.
-iterations = 500
-nadapt = 500
-burn = 0
-target_accept_ratio = 0.8
-@time chain = sample(dp_gmm_sb(y, numcomponents),
-                     NUTS(nadapt, target_accept_ratio),
-                     iterations + nadapt);
+@time chain = begin
+    n_components = 10
+    n_samples = 500
+    nadapt = 500
+    iterations = n_samples + nadapt
+    burn = 0  # For compatibility with HMC below.
+    target_accept_ratio = 0.8
+    
+    sample(dp_gmm_sb(y, n_components),
+           NUTS(nadapt, target_accept_ratio),
+           iterations);
+end
+
+# HMC
+# Compile time approx. 32s.
+# Run time approx. 70s.
+#
+# @time chain = begin
+#     burn = 500  # NOTE: The burn in is also returned. Can't be discarded.
+#     n_samples = 500
+#     iterations = burn + n_samples
+#     n_components = 10
+#     stepsize = 0.01
+#     nleapfrog = floor(Int, 1 / stepsize)
+#  
+#     sample(dp_gmm_sb(y, n_components), 
+#            HMC(stepsize, nleapfrog),
+#            iterations)
+# end
 
 function extract(chain, sym; burn=0)
     tail  = chain[sym].value.data[(burn + 1):end, :, :]
@@ -113,7 +125,7 @@ plot_param_post(mupost, :mu, "mixture means (μ)", burn=burn)
 
 plot_param_post(sigpost, :sigma, "mixture scales (σ)", burn=burn)
 
-# TODO: How to get loglikelihood / log posterior?
+# TODO: How to get loglikelihood or log posterior?
 
 # Plot posterior distribution of number of clusters
 
