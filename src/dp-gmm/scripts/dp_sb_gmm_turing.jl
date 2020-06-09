@@ -70,7 +70,7 @@ Random.seed!(0);
     target_accept_ratio = 0.8
     
     sample(dp_gmm_sb(y, n_components),
-           NUTS(nadapt, target_accept_ratio),
+           NUTS(nadapt, target_accept_ratio, max_depth=10),
            iterations);
 end
 
