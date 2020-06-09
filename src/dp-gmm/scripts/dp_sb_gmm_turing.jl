@@ -9,6 +9,7 @@ using Turing
 using Distributions
 using JSON3
 using PyPlot
+using StatsFuns
 import Random
 import StatsBase: countmap
 include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
@@ -19,8 +20,8 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
     mu ~ filldist(Normal(0, 3), K)
     sig ~ filldist(Gamma(1, 1/10), K)  # mean = 0.1
+    
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
-
     v ~ filldist(Beta(1, alpha), K - 1)
     eta = BnpUtil.stickbreak(v)
 
@@ -28,10 +29,7 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
     # y .~ MixtureModel(Normal.(mu, sig), eta)
 
     # NOTE: Fast, and seems to mix well.
-    log_target = BnpUtil.lpdf_gmm(reshape(y, nobs, 1),
-                                  reshape(mu, 1, K),
-                                  reshape(sig, 1, K),
-                                  reshape(eta, 1, K), dims=2, dropdim=true)
+    log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
     Turing.acclogp!(_varinfo, sum(log_target))
 end
 
@@ -157,5 +155,3 @@ plt.hist(vec(chain[:alpha].value), density=true, bins=30)
 plt.xlabel("α")
 plt.ylabel("density")
 plt.title("Histogram of mass parameter α");
-
-
