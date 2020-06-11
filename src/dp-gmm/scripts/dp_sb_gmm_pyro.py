@@ -8,7 +8,7 @@ import datetime
 print('Last updated: ', datetime.datetime.now(), '(PT)')
 
 
-# In[63]:
+# In[2]:
 
 
 import json
@@ -32,13 +32,39 @@ from torch.nn.functional import pad
 
 # Stick break function
 def stickbreak(v):
-    cumprod_one_minus_v = torch.log1p(-v).cumsum(-1).exp()
+    # cumprod_one_minus_v = torch.log1p(-v).cumsum(-1).exp()
+    cumprod_one_minus_v = torch.cumprod(1 - v, dim=-1)
     one_v = pad(v, (0, 1), value=1)
     c_one = pad(cumprod_one_minus_v, (1, 0), value=1)
     return one_v * c_one
 
 
-# In[60]:
+# In[4]:
+
+
+# NOTE: This resulted in poor inference.
+class GMM(dist.Distribution):
+    def __init__(self, mu, sigma, w):
+        self.mu = mu
+        self.sigma = sigma
+        self.w = w
+    
+    def sample(self, sample_shape=()):
+        return torch.zeros((1, ) + sample_shape)
+    
+    def log_prob(self, y, dim=-1):
+        lp = dist.Normal(self.mu, self.sigma).log_prob(y) + torch.log(self.w)
+        return lp.logsumexp(dim=dim)
+
+# Example:
+# mu = torch.randn(1, 3)
+# sigma = torch.rand(1, 3)
+# w = stickbreak(torch.rand(1, 2))
+# y = torch.randn(10, )
+# GMM(mu, sigma, w).log_prob(y[:, None])
+
+
+# In[5]:
 
 
 # See: https://pyro.ai/examples/gmm.html#
@@ -55,6 +81,8 @@ def stickbreak(v):
 # 
 # In this example, labels are explicitly mentioned. But they are, in fact, marginalized
 # out automatically by pyro. Hence, they do not appear in the posterior samples.
+#
+# Both marginalized and auxiliary variabled versions are equally slow.
 def dp_sb_gmm(y, num_components):
     # Cosntants
     N = y.shape[0]
@@ -70,20 +98,19 @@ def dp_sb_gmm(y, num_components):
     
     eta = stickbreak(v)
     
-    # v = pyro.sample('v', dist.Beta(torch.ones(1, K - 1)), alpha)
-    # eta = stickbreak(v)
-    
     with pyro.plate('components', K):
         mu = pyro.sample('mu', dist.Normal(0., 3.))
         sigma = pyro.sample('sigma', dist.Gamma(1, 10))
 
     with pyro.plate('data', N):
+        # For marginalized version.
+        # pyro.sample('obs', GMM(mu[None, :], sigma[None, :], eta[None, :]), obs=y[:, None])
         # Local variables.
         label = pyro.sample('label', dist.Categorical(eta))
         pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
-# In[5]:
+# In[6]:
 
 
 # Read simulated data.
@@ -92,38 +119,44 @@ with open(path_to_data) as f:
   simdata = json.load(f)
 
 
-# In[6]:
+# In[7]:
 
 
 # Convert data to torch.tensor.
 y = torch.tensor(simdata['y'])
 
 
-# In[65]:
+# In[8]:
 
 
-# # Set random seed for reproducibility.
-# pyro.set_rng_seed(1)
-# 
-# # Set up NUTS sampler.
-# kernel = HMC(dp_sb_gmm, step_size=0.01, num_steps=100)
-# mcmc = MCMC(kernel, num_samples=100, warmup_steps=100)
-# mcmc.run(y, 10)
+# Set random seed for reproducibility.
+pyro.set_rng_seed(2)
+
+# Set up HMC sampler.
+kernel = HMC(dp_sb_gmm, step_size=0.01, num_steps=100, target_accept_prob=0.8)
+mcmc = MCMC(kernel, num_samples=500, warmup_steps=500)
+mcmc.run(y, 10)
+
+# 06:13 for marginalized version.
+
+# For brevity, inference not included in this notebook. 
 
 
-# In[43]:
+# In[9]:
 
 
 # Set random seed for reproducibility.
 pyro.set_rng_seed(1)
 
 # Set up NUTS sampler.
-kernel = NUTS(dp_sb_gmm)
+kernel = NUTS(dp_sb_gmm, target_accept_prob=0.8)
 mcmc = MCMC(kernel, num_samples=500, warmup_steps=500)
 mcmc.run(y, 10)
 
+# 44:07 for marginalized version.
 
-# In[44]:
+
+# In[10]:
 
 
 # Get posterior samples
@@ -131,10 +164,10 @@ posterior_samples = mcmc.get_samples()
 posterior_samples['eta'] = stickbreak(posterior_samples['v'])
 
 
-# In[45]:
+# In[11]:
 
 
-def plot_param_post(params, param_name, param_full_name, figsize=(12, 4)):
+def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
     plt.figure(figsize=figsize)
     param = params[param_name].numpy()
 
@@ -143,8 +176,9 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4)):
     plt.xlabel('mixture components')
     plt.ylabel(param_full_name)
     plt.title('95% Credible Intervals for {}'.format(param_full_name))
-    # for wk in  simdata['w']:
-    #     plt.axhline(wk)
+    if truth is not None:
+        for line in truth:
+            plt.axhline(line, ls=':')
 
     plt.subplot(1, 2, 2)
     plt.plot(param);
@@ -153,25 +187,25 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4)):
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[46]:
+# In[12]:
 
 
-plot_param_post(posterior_samples, 'eta', 'mixture weights')
+plot_param_post(posterior_samples, 'eta', 'mixture weights', truth=simdata['w'])
 
 
-# In[47]:
+# In[13]:
 
 
-plot_param_post(posterior_samples, 'mu', 'mixture means')
+plot_param_post(posterior_samples, 'mu', 'mixture means', truth=simdata['mu'])
 
 
-# In[48]:
+# In[14]:
 
 
-plot_param_post(posterior_samples, 'sigma', 'mixture scales')
+plot_param_post(posterior_samples, 'sigma', 'mixture scales', truth=simdata['sig'])
 
 
-# In[59]:
+# In[15]:
 
 
 plt.hist(posterior_samples['alpha'], bins=30, density=True);
