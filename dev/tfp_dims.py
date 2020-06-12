@@ -25,6 +25,35 @@ ind = tfd.Independent(x, reinterpreted_batch_ndims=2)
 ind.log_prob(np.random.randn(100, 3, 2))
 
 # GMM
-m = tfd.Normal(loc=np.ones(3), scale=1.0)
-ind = tfd.Independent(m, reinterpreted_batch_ndims=None)
-ind.log_prob(np.random.randn(100, ))
+x = np.random.randn(2)
+m = tfd.Normal(loc=np.ones((1, 3)), scale=1.0)
+ind = tfd.Independent(m)
+ind.log_prob(x[:, None])
+m.log_prob(x[:, None])
+
+ncomponents = 10
+bgmm = tfd.JointDistributionNamed(dict(
+  mix_probs=tfd.Dirichlet(
+    concentration=np.ones(components, dtype) / 10.),
+  loc=tfd.Independent(
+    tfd.Normal(
+        loc=np.stack([
+            -np.ones(dims, dtype),
+            np.zeros(dims, dtype),
+            np.ones(dims, dtype),
+        ]),
+        scale=tf.ones([components, dims], dtype)),
+    reinterpreted_batch_ndims=2),
+  precision=tfd.Independent(
+    tfd.WishartTriL(
+        df=5,
+        scale_tril=np.stack([np.eye(dims, dtype=dtype)]*components),
+        input_output_cholesky=True),
+    reinterpreted_batch_ndims=1),
+  s=lambda mix_probs, loc, precision: tfd.Sample(tfd.MixtureSameFamily(
+      mixture_distribution=tfd.Categorical(probs=mix_probs),
+      components_distribution=MVNCholPrecisionTriL(
+          loc=loc,
+          chol_precision_tril=precision)),
+      sample_shape=num_samples)
+))
