@@ -119,13 +119,19 @@ with open(path_to_data) as f:
 y = np.array(simdata['y'], np.float64)
 
 
-# In[9]:
+# In[80]:
 
 
-get_ipython().run_cell_magic('time', '', "\nncomponents = 10\n\nmodel = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)\n\ndef joint_log_prob(obs, mu, sigma, alpha, v):\n    return model.log_prob(obs=obs, \n                          mu=mu, sigma=sigma,\n                          alpha=alpha, v=v)\n    \n_ = joint_log_prob(y, \n                   np.random.randn(10),\n                   np.random.rand(10),\n                   np.float64(1),\n                   np.random.rand(9))\n\nunnormalized_posterior_log_prob = functools.partial(joint_log_prob, y)\n\n# Create initial state?\ninitial_state = [\n    tf.zeros(ncomponents, dtype, name='mu'),\n    tf.ones(ncomponents, dtype, name='sigma'),\n    tf.ones([], dtype, name='alpha'),\n    tf.fill(ncomponents - 1, value=np.float64(0.9), name='v')\n]\n\nbijectors = [\n    tfb.Identity(),\n    tfb.Exp(),\n    tfb.Exp(),\n    tfb.Sigmoid()\n]\n\n# No progress bar?!\n@tf.function(autograph=False)\ndef sample():\n    return tfp.mcmc.sample_chain(\n        num_results=500,\n        num_burnin_steps=500,\n        current_state=initial_state,\n        kernel=tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                # HMC:\n                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(\n                     target_log_prob_fn=unnormalized_posterior_log_prob,\n                     step_size=0.01,\n                     num_leapfrog_steps=100),\n                # NUTS:\n                # inner_kernel=tfp.mcmc.NoUTurnSampler(\n                #      target_log_prob_fn=unnormalized_posterior_log_prob,\n                #      step_size=0.01, max_tree_depth=10\n                # ),\n                bijector=bijectors),\n             num_adaptation_steps=400),\n        trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)\n\n%time [mu, sigma, alpha, v], is_accepted = sample()")
+get_ipython().run_cell_magic('time', '', "\nncomponents = 10\n\nprint('Create model ...')\nmodel = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)\n\nprint('Define log joint density ...')\ndef joint_log_prob(obs, mu, sigma, alpha, v):\n    return model.log_prob(obs=obs, \n                          mu=mu, sigma=sigma,\n                          alpha=alpha, v=v)\n    \n# Test log joint density evaluation\n# _ = joint_log_prob(y, \n#                    np.random.randn(10),\n#                    np.random.rand(10),\n#                    np.float64(1),\n#                    np.random.rand(9))\n\n# I don't know why this is necessary...\nunnormalized_posterior_log_prob = functools.partial(joint_log_prob, y)\n\n# Create initial state?\ninitial_state = [\n    tf.zeros(ncomponents, dtype, name='mu'),\n    tf.ones(ncomponents, dtype, name='sigma') * .1,\n    tf.ones([], dtype, name='alpha'),\n    tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')\n]\n\n# Create bijectors to transform unconstrained to and from constrained parameters-space.\n# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation\n# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used\n# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).\n\n# Define the inverse-transforms for each parameter in sequence.\nbijectors = [\n    tfb.Identity(),  # mu\n    tfb.Exp(),  # sigma\n    tfb.Exp(),  # alpha\n    tfb.Sigmoid()  # v\n]\n\n   \nprint('Define sampler ...')\n@tf.function(autograph=False)\ndef sample(use_nuts):\n    ### NUTS ###\n    if use_nuts:\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.NoUTurnSampler(\n                     target_log_prob_fn=unnormalized_posterior_log_prob,\n                     max_tree_depth=5, step_size=0.01, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=400, target_accept_prob=0.8)  # should be smaller than burn-in.\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n    else:\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(\n                    target_log_prob_fn=unnormalized_posterior_log_prob,\n                    step_size=0.01, num_leapfrog_steps=100, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=400)  # should be smaller than burn-in.\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n\n    return tfp.mcmc.sample_chain(\n        num_results=500,\n        num_burnin_steps=500,\n        current_state=initial_state,\n        kernel=kernel,\n        trace_fn=trace_fn)\n\nprint('Run sampler ...')\n%time [mu, sigma, alpha, v], is_accepted = sample(use_nuts=False)\n# %time [mu, sigma, alpha, v], is_accepted = sample(use_nuts=True)")
 
 
-# In[10]:
+# In[81]:
+
+
+is_accepted.numpy().mean()
+
+
+# In[82]:
 
 
 def plot_param_post(param, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -147,26 +153,26 @@ def plot_param_post(param, param_name, param_full_name, figsize=(12, 4), truth=N
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[11]:
+# In[83]:
 
 
 eta = np.apply_along_axis(stickbreak, 1, v)
 plot_param_post(eta, 'eta', 'mixture weights (eta)', truth=simdata['w']);
 
 
-# In[12]:
+# In[84]:
 
 
 plot_param_post(mu.numpy(), 'mu', 'mixture means (mu)', truth=simdata['mu']);
 
 
-# In[13]:
+# In[85]:
 
 
 plot_param_post(sigma.numpy(), 'sigma', 'mixture scales (sigma)', truth=simdata['sig']);
 
 
-# In[15]:
+# In[86]:
 
 
 plt.hist(alpha.numpy(), density=True, bins=30)
