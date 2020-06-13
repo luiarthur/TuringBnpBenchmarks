@@ -71,6 +71,7 @@ Random.seed!(0);
     
     sample(dp_gmm_sb(y, n_components),
            NUTS(nadapt, target_accept_ratio, max_depth=10),
+           # NUTS(nadapt, target_accept_ratio, max_depth=5),  # 50 seconds, but poor inference.
            iterations);
 end
 
@@ -101,7 +102,7 @@ mupost = extract(chain, :mu, burn=burn);
 sigpost = extract(chain, :sig, burn=burn);
 etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
 
-function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), burn=0)
+function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), truth=nothing)
     plt.figure(figsize=figsize)
 
     plt.subplot(1, 2, 1)
@@ -109,6 +110,12 @@ function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), bu
     plt.xlabel("mixture components")
     plt.ylabel(param_full_name)
     plt.title("95% Credible Intervals for $(param_full_name)")
+    
+    if truth != nothing
+        for line in truth
+            plt.axhline(line, ls=":")
+        end
+    end
 
     plt.subplot(1, 2, 2)
     plt.plot(param)
@@ -117,41 +124,23 @@ function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), bu
     plt.title("Trace plot of $(param_full_name)");
 end
 
-plot_param_post(etapost, :eta, "mixture weights (η)", burn=burn)
+# Loglikelihood can be extracted after model fitting using string macro.
+# See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
 
-plot_param_post(mupost, :mu, "mixture means (μ)", burn=burn)
+loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=chain"
+plt.plot(loglike)
+plt.xlabel("iteration (post-burn)")
+plt.ylabel("Log likelihood")
 
-plot_param_post(sigpost, :sigma, "mixture scales (σ)", burn=burn)
+plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
 
-# TODO: How to get loglikelihood or log posterior?
+plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
 
-# Plot posterior distribution of number of clusters
-
-# Set a threshold for clusters to be considered as significant.
-thresh = 0.01
-
-plt.figure(figsize=(10, 4))
-
-# Trace plot
-plt.subplot(1, 2, 1)
-plt.plot(sum(etapost .> thresh, dims=2))
-plt.xlabel("iteration")
-plt.ylabel("Number of components > $thresh")
-plt.title("Trace plot of number of active components");
-
-# Bar plot
-plt.subplot(1, 2, 2)
-ncomponents_post = vec(sum(etapost .> thresh, dims=2))
-num_samples = length(ncomponents_post)
-countmap_ncomponents = countmap(ncomponents_post)
-x_ncomp = Int.(keys(countmap_ncomponents))
-y_prop = Int.(values(countmap_ncomponents)) / num_samples
-plt.bar(x_ncomp, y_prop)
-plt.xlabel("Number of active components")
-plt.ylabel("Posterior probability")
-plt.title("Distribution of number of active components");
+plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
 
 plt.hist(vec(chain[:alpha].value), density=true, bins=30)
 plt.xlabel("α")
 plt.ylabel("density")
 plt.title("Histogram of mass parameter α");
+
+
