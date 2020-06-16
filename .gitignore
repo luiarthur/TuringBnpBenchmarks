@@ -25,6 +25,7 @@ docs/site/
 
 # Python
 venv/
+__pycache__/
 
 # Notebook
 .ipynb_checkpoints
