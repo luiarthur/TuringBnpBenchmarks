@@ -13,7 +13,7 @@ eye(n::Integer) = Matrix(LinearAlgebra.I, n, n)
 seed = 1
 Random.seed!(seed)
 
-num_components = 5
+num_components = 4
 mu = let
     _mu = collect(1:num_components)
     centered_mu = _mu .- (num_components + 1) / 2 
