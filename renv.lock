@@ -147,6 +147,13 @@
       "RemoteSha": "114cca81b1dcdecd70e9bb97bbf6110e1d0a68ad",
       "Hash": "cd2077ae972b28131085a3663f20508b"
     },
+    "rjson": {
+      "Package": "rjson",
+      "Version": "0.2.20",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7d597f982ee6263716b6a2f28efd29fa"
+    },
     "rpart": {
       "Package": "rpart",
       "Version": "4.1-15",
