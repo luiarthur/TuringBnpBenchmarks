@@ -141,4 +141,10 @@ if __name__ == '__main__':
     # DP CRP GMM NIMBLE TIMES
     # DP CRP GMM TURING TIMES
     
+    ppl = times_df.pop("ppl")
+    model = times_df.pop("model")
+
+    times_df.insert(0, "model", model)
+    times_df.insert(0, "ppl", ppl)
     times_df.round().to_csv('../timings/timings.csv', index=False, na_rep='NA')
+
