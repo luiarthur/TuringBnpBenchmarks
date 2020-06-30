@@ -1,0 +1,6 @@
+advi_compile,advi_run,hmc_compile,hmc_run,model,nuts_compile,nuts_run,ppl
+52.0,2.0,52.0,35.0,dp_sb_gmm,52.0,99.0,stan
+4.0,10.0,21.0,74.0,dp_sb_gmm,14.0,398.0,turing
+NA,NA,0.0,54.0,dp_sb_gmm,0.0,499.0,tfp
+0.0,15.0,0.0,584.0,dp_sb_gmm,0.0,4678.0,pyro
+NA,NA,8.0,14.0,dp_sb_gmm,3.0,29.0,numpyro
