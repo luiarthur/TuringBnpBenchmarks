@@ -1,4 +1,3 @@
-# This is a comment
 advi_compile,advi_run,hmc_compile,hmc_run,model,nuts_compile,nuts_run,ppl
 52.0,2.0,52.0,35.0,dp_sb_gmm,52.0,99.0,stan
 4.0,10.0,21.0,74.0,dp_sb_gmm,14.0,398.0,turing
