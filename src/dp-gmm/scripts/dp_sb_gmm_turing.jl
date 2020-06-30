@@ -17,12 +17,12 @@ using Flux
 include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
 # DP GMM model under stick-breaking construction
-@time @model dp_gmm_sb(y, K) = begin
+@model dp_gmm_sb(y, K) = begin
     nobs = length(y)
 
     mu ~ filldist(Normal(0, 3), K)
     sig ~ filldist(Gamma(1, 1/10), K)  # mean = 0.1
-    
+
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
     v ~ filldist(Beta(1, alpha), K - 1)
     eta = BnpUtil.stickbreak(v)
@@ -34,7 +34,6 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
     log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
     Turing.acclogp!(_varinfo, sum(log_target))
 end
-;
 
 # Directory where all simulation data are stored.
 data_dir = joinpath(@__DIR__, "../../data/sim-data")
@@ -68,10 +67,12 @@ m = dp_gmm_sb(y, 10)
 q0 = Variational.meanfield(m)
 
 advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
+# NOTE: I can't get the other optimizers to work. So the timings may be overestimated.
 @time q = vi(m, advi, optimizer=Flux.ADAM(1e-2));
+# @time q = vi(m, advi, optimizer=RMSProp());  # a little slower, inference not as good.
 
 # Function for generating samples from approximate posterior
-nsamples = 500
+nsamples = 1000
 qsamples = rand(q, nsamples)
 _, sym2range = Variational.bijector(m; sym_to_ranges = Val(true));
 extract(sym) = qsamples[collect(sym2range[sym][1]), :]
@@ -80,7 +81,8 @@ extract(sym) = qsamples[collect(sym2range[sym][1]), :]
 vpost = extract(:v)
 etapost = hcat([BnpUtil.stickbreak(vpost[:, col]) for col in 1:size(vpost, 2)]...)';
 
-plt.figure(figsize=(11, 4))
+plt.figure(figsize=(7, 4))
+
 plt.subplot(2, 2, 1)
 plt.boxplot(etapost, whis=[2.5, 97.5], showmeans=true, showfliers=false);
 foreach(line -> plt.axhline(line, ls=":"), data[:w])
@@ -102,7 +104,14 @@ plt.ylabel("σ")
 plt.subplot(2, 2, 4)
 plt.hist(extract(:alpha)', density=true, bins=30)
 plt.xlabel("α")
-plt.ylabel("density");
+plt.ylabel("density")
+
+plt.tight_layout();
+
+function extract(chain, sym; burn=0)
+    tail  = chain[sym].value.data[(burn + 1):end, :, :]
+    return dropdims(tail, dims=3)
+end
 
 # Fit DP-SB-GMM with HMC
 
@@ -112,7 +121,7 @@ Random.seed!(0);
 # Compile time approx. 32s.
 # Run time approx. 70s.
 
-@time chain = begin
+@time hmc_chain = begin
     burn = 500  # NOTE: The burn in is also returned. Can't be discarded.
     n_samples = 500
     iterations = burn + n_samples
@@ -124,6 +133,7 @@ Random.seed!(0);
            HMC(stepsize, nleapfrog),
            iterations)
 end
+;
 
 # Fit DP-SB-GMM with NUTS
 
@@ -134,7 +144,7 @@ Random.seed!(0);
 # Compile time approx. 11s
 # Run time approx. 244s
 # Slower, but works a little better.
-@time chain = begin
+@time nuts_chain = begin
     n_components = 10
     n_samples = 500
     nadapt = 500
@@ -144,19 +154,10 @@ Random.seed!(0);
     
     sample(dp_gmm_sb(y, n_components),
            NUTS(nadapt, target_accept_ratio, max_depth=10),
-           # NUTS(nadapt, target_accept_ratio, max_depth=5),  # 50 seconds, but poor inference.
+           # NUTS(nadapt, target_accept_ratio, max_depth=5),  # 50s, but poor inference.
            iterations);
 end
-
-function extract(chain, sym; burn=0)
-    tail  = chain[sym].value.data[(burn + 1):end, :, :]
-    return dropdims(tail, dims=3)
-end
-
-vpost = extract(chain, :v, burn=burn);
-mupost = extract(chain, :mu, burn=burn);
-sigpost = extract(chain, :sig, burn=burn);
-etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+;
 
 function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), truth=nothing)
     plt.figure(figsize=figsize)
@@ -180,23 +181,35 @@ function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), tr
     plt.title("Trace plot of $(param_full_name)");
 end
 
-# Loglikelihood can be extracted after model fitting using string macro.
-# See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
+function plot_all_params(param; burn)
+    vpost = extract(param, :v, burn=burn);
+    mupost = extract(param, :mu, burn=burn);
+    sigpost = extract(param, :sig, burn=burn);
+    etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+    
+    plt.figure(figsize=(11, 4))
+    plt.subplot(1, 2, 1)
+    
+    # Loglikelihood can be extracted after model fitting using string macro.
+    # See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
+    loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=param"
+    plt.plot(loglike[(burn+1):end])
+    plt.xlabel("iteration (post-burn)")
+    plt.ylabel("Log likelihood")
+    
+    plt.subplot(1, 2, 2)
+    plt.hist(vec(param[:alpha].value), density=true, bins=30)
+    plt.xlabel("α")
+    plt.ylabel("density")
+    plt.title("Histogram of mass parameter α"); 
+    
+    plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
+    plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
+    plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
+end
 
-loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=chain"
-plt.plot(loglike)
-plt.xlabel("iteration (post-burn)")
-plt.ylabel("Log likelihood")
+plot_all_params(hmc_chain, burn=500);
 
-plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
-
-plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
-
-plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
-
-plt.hist(vec(chain[:alpha].value), density=true, bins=30)
-plt.xlabel("α")
-plt.ylabel("density")
-plt.title("Histogram of mass parameter α");
+plot_all_params(nuts_chain, burn=0);
 
 

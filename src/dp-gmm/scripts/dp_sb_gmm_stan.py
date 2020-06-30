@@ -123,7 +123,7 @@ def init_prior(model, data, seed=None, iter=10000, adapt_iter=1000):
 # In[7]:
 
 
-# Approximate posterior via ADVI: 1.2s
+# Approximate posterior via ADVI
 # - ADVI is sensitive to starting values. Should run several times and pick run 
 #   that has best fit (e.g. highest ELBO / logliklihood).
 # - Variational inference works better with more data. Inference is less accurate
@@ -132,7 +132,7 @@ def init_prior(model, data, seed=None, iter=10000, adapt_iter=1000):
 seed_ll = dict()
 for seed in range(1, 21):
     prior_init = init_prior(sm, data, seed=seed)
-    fit = sm.vb(data=data, iter=500, seed=seed, algorithm='meanfield', adapt_iter=100, verbose=False, init=prior_init)
+    fit = sm.vb(data=data, iter=1000, seed=seed, algorithm='meanfield', adapt_iter=1000, verbose=False, init=prior_init)
     mean_loglike = pystan_vb_extract(fit)['ll'].mean()
     print("Seed: {} | Mean loglike: {}".format(seed, mean_loglike))
     seed_ll[seed] = mean_loglike
@@ -145,8 +145,7 @@ print('Best seed: {}'.format(best_seed))
 # In[8]:
 
 
-prior_init = init_prior(sm, data, seed=best_seed)
-fit = sm.vb(data=data, iter=1000, seed=best_seed, algorithm='meanfield', adapt_iter=1000, verbose=False, init=prior_init)
+get_ipython().run_cell_magic('time', '', "# Timing: 2.34s / 1000 iterations.\nprior_init = init_prior(sm, data, seed=best_seed)\nfit = sm.vb(data=data, iter=1000, seed=best_seed,\n            algorithm='meanfield', adapt_iter=1000, verbose=False, init=prior_init,\n            grad_samples=1, elbo_samples=100, adapt_engaged=True, output_samples=1000)  # anything similar in Turing?")
 
 
 # In[9]:
@@ -201,13 +200,13 @@ niters = burn + nsamples
 # In[11]:
 
 
-get_ipython().run_cell_magic('time', '', "\n# Sample from posterior via HMC: 53s\n# NOTE: num_leapfrog = int_time / stepsize.\nfit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n                  algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
+get_ipython().run_cell_magic('time', '', "# Sample from posterior via HMC: 34s\n# NOTE: num_leapfrog = int_time / stepsize.\nhmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n                  algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
 # In[12]:
 
 
-get_ipython().run_cell_magic('time', '', '\n# Sample from posterior via NUTS: 1m 57s\nfit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1)')
+get_ipython().run_cell_magic('time', '', '# Sample from posterior via NUTS: 1m 29s\nnuts_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1)')
 
 
 # In[13]:
@@ -236,39 +235,40 @@ def plot_param_post(samples, param_name, param_full_name, figsize=(12, 4), truth
 # In[14]:
 
 
-plot_param_post(fit, 'eta', 'mixture weights (eta)', truth=simdata['w'])
+def plot_all_params(samples):
+    plot_param_post(samples, 'eta', 'mixture weights (eta)', truth=simdata['w'])
+    plot_param_post(samples, 'mu', 'mixture means (mu)', truth=simdata['mu'])
+    plot_param_post(samples, 'sigma', 'mixture scales (sigma)', truth=simdata['sig'])
+    
+    plt.figure(figsize=(12, 4))
+    
+    # Plot distribution of alpha
+    plt.subplot(1, 2, 1)
+    plt.hist(samples['alpha'], bins=30, density=True);
+    plt.xlabel('alpha')
+    plt.ylabel('density')
+    plt.title('Posterior distribution of DP mass parameter (alpha)'); 
+    
+    # Plot trace of log likelihood (up to proportionality constant)
+    plt.subplot(1, 2, 2)
+    plt.plot(samples['lp__'])
+    plt.xlabel("Iterations (post warmup)")
+    plt.ylabel("Log likelihood (scaled)");
+    plt.title('Trace plot of log likelihood (scaled)'); 
 
 
 # In[15]:
 
 
-plot_param_post(fit, 'mu', 'mixture means (mu)', truth=simdata['mu'])
+# Plot posterior distribution of parameters under HMC
+plot_all_params(hmc_fit)
 
 
 # In[16]:
 
 
-plot_param_post(fit, 'sigma', 'mixture scales (sigma)', truth=simdata['sig'])
-
-
-# In[17]:
-
-
-# Plot trace of log likelihood (up to proportionality constant)
-plt.plot(fit['lp__'])
-plt.xlabel("Iterations (post warmup)")
-plt.ylabel("Log likelihood (scaled)");
-plt.title('Trace plot of log likelihood (scaled)');
-
-
-# In[18]:
-
-
-# Plot distribution of alpha
-plt.hist(fit['alpha'], bins=30, density=True);
-plt.xlabel('alpha')
-plt.ylabel('density')
-plt.title('Posterior distribution of DP mass parameter (alpha)');
+# Plot posterior distribution of parameters under NUTS
+plot_all_params(nuts_fit)
 
 
 # In[ ]:

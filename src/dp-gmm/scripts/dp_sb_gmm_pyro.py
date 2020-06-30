@@ -25,12 +25,19 @@ from pyro.infer.mcmc import NUTS, HMC
 import torch
 import torch.distributions.constraints as constraints
 from torch.nn.functional import pad
+from tqdm import trange
+
+# For ADVI
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO
+from pyro.contrib.autoguide import AutoDiagonalNormal
+from pyro.optim import Adam
 
 
 # In[3]:
 
 
 # Stick break function
+# See: https://pyro.ai/examples/dirichlet_process_mixture.html
 def stickbreak(v):
     # cumprod_one_minus_v = torch.log1p(-v).cumsum(-1).exp()
     cumprod_one_minus_v = torch.cumprod(1 - v, dim=-1)
@@ -106,7 +113,7 @@ def dp_sb_gmm(y, num_components):
         # For marginalized version.
         # pyro.sample('obs', GMM(mu[None, :], sigma[None, :], eta[None, :]), obs=y[:, None])
         # Local variables.
-        label = pyro.sample('label', dist.Categorical(eta))
+        label = pyro.sample('label', dist.Categorical(eta), infer={"enumerate": "parallel"})
         pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
@@ -129,42 +136,86 @@ y = torch.tensor(simdata['y'])
 # In[8]:
 
 
-# Set random seed for reproducibility.
-pyro.set_rng_seed(2)
-
-# Set up HMC sampler.
-kernel = HMC(dp_sb_gmm, step_size=0.01, num_steps=100, target_accept_prob=0.8)
-mcmc = MCMC(kernel, num_samples=500, warmup_steps=500)
-mcmc.run(y, 10)
-
-# 06:13 for marginalized version.
-
-# For brevity, inference not included in this notebook. 
+get_ipython().run_cell_magic('time', '', "\n# See: https://pyro.ai/examples/dirichlet_process_mixture.html\n\npyro.clear_param_store()\n\n# Automatically define variational distribution.\nguide = AutoDiagonalNormal(\n    pyro.poutine.block(dp_sb_gmm, expose=['alpha', 'v', 'mu', 'sigma'])\n)  # a mean field guide\n\nsvi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), TraceEnum_ELBO())\n\n# pyro.set_rng_seed(4)\npyro.set_rng_seed(7)\n\n# do gradient steps\nloss = []\nfor step in trange(2000):\n    _loss = svi.step(y, 10)\n    loss.append(_loss)\n    \n# Plot ELBO    \nplt.plot(loss);")
 
 
 # In[9]:
 
+
+samples = guide.get_posterior().sample((1000, ))
+alpha = samples[:, 0].exp()
+v = samples[:, 1:10].sigmoid()
+mu = samples[:, 10:20]
+sigma = samples[:, 20:30].exp()
+
+plt.figure(figsize=(12, 8))
+plt.subplot(2, 2, 1)
+plt.boxplot(stickbreak(v).numpy(), whis=[2.5, 97.5], showmeans=True, showfliers=False)
+for line in simdata['w']: plt.axhline(line, ls=":")
+plt.xlabel('components')
+plt.ylabel('v')
+
+plt.subplot(2, 2, 2)
+plt.boxplot(mu.numpy(), whis=[2.5, 97.5], showmeans=True, showfliers=False)
+for line in simdata['mu']: plt.axhline(line, ls=":")
+plt.xlabel('components')
+plt.ylabel('mu')
+
+plt.subplot(2, 2, 3)
+plt.boxplot(sigma.numpy(), whis=[2.5, 97.5], showmeans=True, showfliers=False)
+for line in simdata['sig']: plt.axhline(line, ls=":")
+plt.xlabel('components')
+plt.ylabel('sigma')
+
+plt.subplot(2, 2, 4)
+plt.hist(alpha.numpy(), bins=30, density=True)
+plt.xlabel('alpha')
+plt.ylabel('density');
+
+
+# In[10]:
+
+
+pyro.clear_param_store()
+
+# Set random seed for reproducibility.
+pyro.set_rng_seed(1)
+
+# Set up HMC sampler.
+kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1, target_accept_prob=0.8,
+             adapt_step_size=False, adapt_mass_matrix=False)
+# kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1, target_accept_prob=0.8)
+hmc = MCMC(kernel, num_samples=500, warmup_steps=500)
+hmc.run(y, 10)
+
+# 06:13 for marginalized version.
+
+# Get posterior samples
+hmc_posterior_samples = hmc.get_samples()
+hmc_posterior_samples['eta'] = stickbreak(hmc_posterior_samples['v'])
+
+
+# In[11]:
+
+
+pyro.clear_param_store()
 
 # Set random seed for reproducibility.
 pyro.set_rng_seed(1)
 
 # Set up NUTS sampler.
 kernel = NUTS(dp_sb_gmm, target_accept_prob=0.8)
-mcmc = MCMC(kernel, num_samples=500, warmup_steps=500)
-mcmc.run(y, 10)
+nuts = MCMC(kernel, num_samples=500, warmup_steps=500)
+nuts.run(y, 10)
 
 # 44:07 for marginalized version.
 
-
-# In[10]:
-
-
 # Get posterior samples
-posterior_samples = mcmc.get_samples()
-posterior_samples['eta'] = stickbreak(posterior_samples['v'])
+nuts_posterior_samples = nuts.get_samples()
+nuts_posterior_samples['eta'] = stickbreak(nuts_posterior_samples['v'])
 
 
-# In[11]:
+# In[12]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -187,35 +238,30 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[12]:
-
-
-plot_param_post(posterior_samples, 'eta', 'mixture weights', truth=simdata['w'])
-
-
 # In[13]:
 
 
-plot_param_post(posterior_samples, 'mu', 'mixture means', truth=simdata['mu'])
+def plot_all_params(params):
+    plot_param_post(params, 'eta', 'mixture weights', truth=simdata['w'])
+    plot_param_post(params, 'mu', 'mixture locations', truth=simdata['mu'])
+    plot_param_post(params, 'sigma', 'mixture scales', truth=simdata['sig'])
+    
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.hist(params['alpha'], bins=30, density=True);
+    plt.xlabel("alpha")
+    plt.ylabel("density")
+    plt.title("Posterior distribution of alpha");
 
 
 # In[14]:
 
 
-plot_param_post(posterior_samples, 'sigma', 'mixture scales', truth=simdata['sig'])
+plot_all_params(hmc_posterior_samples)
 
 
 # In[15]:
 
 
-plt.hist(posterior_samples['alpha'], bins=30, density=True);
-plt.xlabel("alpha")
-plt.ylabel("density")
-plt.title("Posterior distribution of alpha");
-
-
-# In[ ]:
-
-
-
+plot_all_params(nuts_posterior_samples)
 

@@ -142,21 +142,63 @@ y = np.array(simdata['y'])
 # In[9]:
 
 
-get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\n# kernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1) \n\nmcmc = MCMC(kernel, num_samples=500, num_warmup=500)\nmcmc.run(rng_key, y, 10)')
+# Experimental, syntax not known.
+
+# %%time
+# 
+# # For ADVI
+# from numpyro.infer import SVI, ELBO
+# from numpyro.contrib.autoguide import AutoDiagonalNormal
+# from numpyro.optim import Adam
+# from functools import namedtuple
+# from tqdm import trange
+# 
+# # Set random seed for reproducibility.
+# rng_key = random.PRNGKey(0)
+# 
+# # Automatically define variational distribution.
+# guide = AutoDiagonalNormal(dp_sb_gmm)  # a mean field guide
+# 
+# svi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), ELBO())
+# 
+# # do gradient steps
+# 
+# loss = []
+# for step in trange(2000):
+#     _loss = svi.update(SVIState, y=y, num_components=10)
+#     loss.append(_loss)
+#     
+# # Plot ELBO    
+# plt.plot(loss);
 
 
 # In[10]:
 
 
-# Get posterior samples
-posterior_samples = mcmc.get_samples()
+def get_posterior_samples(mcmc):
+    # Get posterior samples
+    posterior_samples = mcmc.get_samples()
 
-# `np.apply_along_axis` not implemented in numpyro?
-# TODO: Is there a more efficient way to do this?
-posterior_samples['eta'] = np.vstack([stickbreak(v) for v in posterior_samples['v']])
+    # `np.apply_along_axis` not implemented in numpyro?
+    # TODO: Is there a more efficient way to do this?
+    posterior_samples['eta'] = np.vstack([stickbreak(v) for v in posterior_samples['v']]) 
+    
+    return posterior_samples
 
 
 # In[11]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1) \n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
+
+
+# In[12]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\nnuts = MCMC(kernel, num_samples=500, num_warmup=500)\nnuts.run(rng_key, y, 10)\n\nnuts_samples = get_posterior_samples(nuts)')
+
+
+# In[13]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -179,37 +221,33 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[12]:
-
-
-# TODO: How to get log-likelihood?
-
-
-# In[13]:
-
-
-plot_param_post(posterior_samples, 'eta', 'mixture weights', truth=simdata['w'])
-
-
 # In[14]:
 
 
-plot_param_post(posterior_samples, 'mu', 'mixture means', truth=simdata['mu'])
+def plot_all_params(samples):
+    # TODO: How to get log-likelihood?
+    plot_param_post(samples, 'eta', 'mixture weights', truth=simdata['w'])
+    plot_param_post(samples, 'mu', 'mixture means', truth=simdata['mu'])
+    plot_param_post(samples, 'sigma', 'mixture scales', truth=simdata['sig'])
+    
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.hist(samples['alpha'], bins=30, density=True);
+    plt.xlabel("alpha")
+    plt.ylabel("density")
+    plt.title("Posterior distribution of alpha");
 
 
 # In[15]:
 
 
-plot_param_post(posterior_samples, 'sigma', 'mixture scales', truth=simdata['sig'])
+plot_all_params(hmc_samples)
 
 
 # In[16]:
 
 
-plt.hist(posterior_samples['alpha'], bins=30, density=True);
-plt.xlabel("alpha")
-plt.ylabel("density")
-plt.title("Posterior distribution of alpha");
+plot_all_params(nuts_samples)
 
 
 # In[ ]:
