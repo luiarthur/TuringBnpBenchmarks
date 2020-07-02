@@ -21,6 +21,16 @@ function extract(chain, sym; burn=0)
     return dropdims(tail, dims=3)
 end
 
+function counts_plot(x; density=false, color="C0", lw=4)
+    cm_x = countmap(x)
+    number = collect(keys(cm_x))
+    count = let
+        c = collect(values(cm_x))
+        density ? c / sum(c) : c
+    end
+    plt.vlines(number, 0, count, color=color, lw=lw)
+end
+
 # FIXME: Not working???
 
 # Define model
@@ -71,61 +81,42 @@ data = vcat(randn(10), randn(10) .- 5, randn(10) .+ 10)
 data .-= mean(data)
 data /= std(data);
 
+# plt.scatter(1:length(data), sort(data))
+plt.hist(data, bins=15);
+
 # Fit model
 Random.seed!(2)
 iterations = 1000
 model_fun = infiniteGMM(data)
-chain = sample(model_fun, SMC(), iterations)
+chain = sample(model_fun, SMC(), iterations);
 
-chain
+samples = chain.value.data[:, 4:end, 1]
+z = samples[:, end-30+1:end]
+mu = samples[:, 1:end-30];
 
-x =  [1,3,3,1]
-map(k -> sum(x .== k), 1:3)
+mu
 
-vpost = extract(chain, :v, burn=burn);
-mupost = extract(chain, :mu, burn=burn);
-sigpost = extract(chain, :sig, burn=burn);
-etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+nclus = [length(unique(z[i, :])) for i in 1:size(z, 1)]
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(nclus);
+plt.subplot(1, 2, 2);
+counts_plot(nclus, density=true);
+plt.xlabel("Number of clusters")
+plt.ylabel("Posterior Probability");
 
-function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), truth=nothing)
-    plt.figure(figsize=figsize)
+# counts_plot(z[end-2, :])
 
-    plt.subplot(1, 2, 1)
-    plt.boxplot(param, whis=[2.5, 97.5], showmeans=true, showfliers=false)
-    plt.xlabel("mixture components")
-    plt.ylabel(param_full_name)
-    plt.title("95% Credible Intervals for $(param_full_name)")
-    
-    if truth != nothing
-        for line in truth
-            plt.axhline(line, ls=":")
-        end
-    end
+counts_plot(z[5,:]);
 
-    plt.subplot(1, 2, 2)
-    plt.plot(param)
-    plt.xlabel("iterations")
-    plt.ylabel(param_full_name)
-    plt.title("Trace plot of $(param_full_name)");
+function rand_mu(mu, z, i)
+    mu_vec =  filter(x -> !ismissing(x), mu[i, :])
+    z = Int(rand(z[i, :]))
+    mu_vec[z]
 end
+post_pred = [rand(Normal(rand_mu(mu, z, i), 1)) for i in 1:size(z, 1)]
+plt.hist(post_pred);
 
-# Loglikelihood can be extracted after model fitting using string macro.
-# See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
-
-loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=chain"
-plt.plot(loglike)
-plt.xlabel("iteration (post-burn)")
-plt.ylabel("Log likelihood")
-
-plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
-
-plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
-
-plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
-
-plt.hist(vec(chain[:alpha].value), density=true, bins=30)
-plt.xlabel("α")
-plt.ylabel("density")
-plt.title("Histogram of mass parameter α");
+mu
 
 
