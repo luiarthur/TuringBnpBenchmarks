@@ -5,7 +5,6 @@ println("Last updated: ", Dates.now(), " (PT)")
 import Pkg; Pkg.activate("../../../")
 
 # Import Libraries
-using DynamicPPL
 using Turing
 using Turing: Variational
 import Turing.RandomMeasures.DirichletProcess
@@ -49,62 +48,31 @@ function counts_plot(x; density=false, color="C0", lw=4)
 end
 
 exp_num_clus(a, n) = a * log1p(n / a)
-counts_plot(rand(Poisson(exp_num_clus(0.5, length(y))), 100000), density=true);
+
+alpha_prior = Uniform(0, 0.5)
+a = rand(alpha_prior, 10000)
+nclus = rand.(Poisson.(exp_num_clus.(a, length(y))))
+
+counts_plot(nclus, density=true)
+
 plt.xlabel("counts")
-plt.ylabel("probability")
-plt.title("prior distribution for alpha");
+plt.ylabel("prior probability")
+plt.title("prior distribution for number of clusters");
 
 # a = [0.1, 0.5, 1.0, 1.5, 2.0]
 # plt.scatter(a, exp_num_clus.(a, 50))
 
-# DP GMM model under CRP construction
-@model dp_gmm_crp(y) = begin
-    nobs = length(y)
-    
-    alpha ~ Gamma(1, 1)  # mean = a*b
-    rpm = DirichletProcess(alpha)
-    
-    # Base measure.
-    H = arraydist([Normal(0, 3), InverseGamma(2, 0.05)])
-    
-    # Latent assignment.
-    z = tzeros(Int, nobs) * 0.1
-    
-    # Locations and scales of infinitely many clusters.
-    mu_sigma = TArray(Vector{Float64}, 0)
-    
-    for i in 1:nobs
-        # Number of clusters.
-        K = maximum(z)
-        n = Vector{Int}([sum(z .== k) for k in 1:K])
-        
-        # Sample cluster label.
-        z[i] ~ ChineseRestaurantProcess(rpm,  n)
-        
-        # Create a new cluster.
-        if z[i] > K
-            push!(mu_sigma, [0.0, 0.1])
-            mu_sigma[z[i]] ~ H
-        end
-        
-        # Sampling distribution.
-        mu, sigma = mu_sigma[z[i]]
-        y[i] ~ Normal(mu, sigma)
-    end
-end
-;
-
 @model dp_gmm_crp_delayed(y, Kmax) = begin
     nobs = length(y)
     
-    # alpha ~ Gamma(1, 1)  # mean = a*b
-    alpha ~ Uniform(0, 0.5)
+    alpha ~ Gamma(1, 1/10)  # mean = a*b
+    # alpha ~ Uniform(0, 1.0)
     rpm = DirichletProcess(alpha)
     
     # Base measure.
     H_mu = Normal(0, 3)
-    # H_sigma = InverseGamma(2, 0.01)
     H_sigma = Uniform(0, 0.3)
+    # H_sigma = LogNormal(-1, 0.5)
     
     # Latent assignment.
     z = tzeros(Int, nobs)
@@ -112,7 +80,7 @@ end
     K = 0
 
     mu = tzeros(Float64, Kmax)
-    sigma = tzeros(Float64, Kmax)
+    sigma_sq = tzeros(Float64, Kmax)
 
     for i in 1:nobs
         z[i] ~ ChineseRestaurantProcess(rpm,  n)
@@ -123,12 +91,10 @@ end
             sigma[z[i]] ~ H_sigma
             K += 1
         end
+        
         y[i] ~ Normal(mu[z[i]], sigma[z[i]])
     end
-
-    # for i in 1:nobs
-    # end
-end
+end;
 
 # Set random seed for reproducibility
 Random.seed!(0);
@@ -137,16 +103,17 @@ Random.seed!(0);
 # Run time approx. 70s
 
 @time chain = begin
-    burn = 2000  # NOTE: The burn in is also returned. Discard manually.
+    burn = 1000# NOTE: The burn in is also returned. Discard manually.
     n_samples = 1000
     iterations = burn + n_samples
 
-    # sample(dp_gmm_crp_delayed(y, 20), SMC(1.0), iterations)
-    sample(dp_gmm_crp_delayed(y, 30), PG(10), iterations)
+    sample(dp_gmm_crp_delayed(y, 20), SMC(), iterations)
+    # sample(dp_gmm_crp_delayed(y, 30), PG(10), iterations)
     # sample(dp_gmm_crp_delayed(y, 15), SMC(), iterations)
     # sample(dp_gmm_crp_delayed(y, 30), Gibbs(PG(20, :z), PG(10, :alpha, :mu, :sigma)), iterations)
     # sample(dp_gmm_crp_delayed(y, 15), Gibbs(PG(20, :z), PG(10, :mu, :sigma)), iterations)
-    # sample(dp_gmm_crp_delayed(y, 30), Gibbs(MH(0.1, :alpha), PG(10, :z), PG(10, :mu, :sigma)), iterations)
+    # sample(dp_gmm_crp_delayed(y, 30), Gibbs(MH(0.1, :alpha), PG(50, :z), MH(0.01, :mu, :sigma)), iterations)
+    # sample(dp_gmm_crp_delayed(y, 30), Gibbs(MH(0.1, :alpha), PG(5, :z), PG(5, :mu, :sigma)), iterations)
     
     # sample(dp_gmm_crp(y), SMC(), iterations)
     # sample(dp_gmm_crp(y), IS(), iterations)
@@ -154,7 +121,8 @@ Random.seed!(0);
     # sample(dp_gmm_crp(y), PG(10), iterations)
 end;
 
-chain.value.data
+burn=0
+chain.value
 
 # chain[:sigma]
 
@@ -180,6 +148,8 @@ plt.ylabel("probability")
 
 plt.tight_layout();
 
+countmap(vec(Float64.(chain[:alpha].value.data)))
+
 plt.figure(figsize=(12, 4))
 
 plt.subplot(1, 3, 1)
@@ -201,12 +171,22 @@ plt.ylabel("density")
 
 plt.tight_layout();
 
-plt.scatter(coalesce.(chain[:sigma].value.data[burn+1:end, :, 1], 0.0),
-            coalesce.(chain[:mu].value.data[burn+1:end, :, 1], 0.0),
-            alpha=0.1, label="posterior samples");
+plt.plot(coalesce.(chain[:mu].value.data, 0.0)[:, :, 1])
+foreach(line -> plt.axhline(line, ls=":"), data[:mu])
+
+jitter(x; eps=std(x)/30) = x + randn(length(x)) * eps
+
+sigs = coalesce.(chain[:sigma].value.data[burn+1:end, :, 1], 0.0)
+mus = coalesce.(chain[:mu].value.data[burn+1:end, :, 1], 0.0)
+
+plt.scatter(jitter(vec(sigs)), jitter(vec(mus)), label="posterior samples (jittered)", s=1);
 plt.scatter(data[:sig], data[:mu], marker="X", s=60, label="truth")
 plt.xlabel("sigma")
 plt.ylabel("mu")
+# foreach(line -> plt.axhline(line, ls=":"), data[:mu])
+# foreach(line -> plt.axvline(line, ls=":"), data[:sig])
 plt.legend(loc="upper left");
+
+plt.boxplot(mus);
 
 
