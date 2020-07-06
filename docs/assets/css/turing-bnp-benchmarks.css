@@ -1,0 +1,18 @@
+div#footer_wrap {
+  padding: 20px;
+}
+
+/* font stuff */
+body, h1, h2, h3, h4, h5, h6 {
+  font-family: 'Roboto', sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 400;
+  padding-top: 30px;
+  padding-bottom: 10px;
+}
+strong { font-weight: 400; }
+body {
+  font-size: 21px;
+  font-weight: 300;
+}

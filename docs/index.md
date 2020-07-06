@@ -2,7 +2,7 @@
 layout: page
 ---
 
-# This is the home page!
+# Welcome to Turing BNP Benchmarks!
 
 Check out this <a href="{{site.baseurl}}/test-page.html"> test page</a>!
 It is way more interesting. 
@@ -26,3 +26,5 @@ It is way more interesting.
 </div>
 <hr>
 {% endfor %}
+
+
