@@ -1,8 +1,9 @@
 # Site settings
-title: "My site title"
+title: "Turing BNP Benchmarks"
+subtitle: "GSoC 2020 Turing.jl Project"
 email: luiarthur@gmail.com
-description: "Put a description here"
-# google_analytics: <put google analytics seo tag here>
+description: "Benchmarks for Bayesian nonparametric models implemented in various PPLs."
+google_analytics: UA-135308301-2
 
 plugins:
   # search engine optimization
