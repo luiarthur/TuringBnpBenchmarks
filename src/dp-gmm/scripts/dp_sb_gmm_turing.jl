@@ -1,15 +1,19 @@
+import Dates
+println("Last updated: ", Dates.now(), " (PT)")
+
 # Load environment
 import Pkg; Pkg.activate("../../../")
 
 # Import Libraries
 using Turing
+using Turing: Variational
 using Distributions
 using JSON3
-using CSV
 using PyPlot
-const plt = PyPlot.plt
+using StatsFuns
 import Random
-import StatsBase: countmap
+using BenchmarkTools
+using Flux
 include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
 # DP GMM model under stick-breaking construction
@@ -18,8 +22,8 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
     mu ~ filldist(Normal(0, 3), K)
     sig ~ filldist(Gamma(1, 1/10), K)  # mean = 0.1
-    alpha ~ Gamma(1, 1/10)  # mean = 0.1
 
+    alpha ~ Gamma(1, 1/10)  # mean = 0.1
     v ~ filldist(Beta(1, alpha), K - 1)
     eta = BnpUtil.stickbreak(v)
 
@@ -27,10 +31,7 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
     # y .~ MixtureModel(Normal.(mu, sig), eta)
 
     # NOTE: Fast, and seems to mix well.
-    log_target = BnpUtil.lpdf_gmm(reshape(y, nobs, 1),
-                                  reshape(mu, 1, K),
-                                  reshape(sig, 1, K),
-                                  reshape(eta, 1, K), dims=2, dropdim=true)
+    log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
     Turing.acclogp!(_varinfo, sum(log_target))
 end
 
@@ -44,54 +45,121 @@ data = let
     JSON3.read(x, Dict{Symbol, Vector{Any}})
 end
 
+# Convert data to vector of floats
+y = Float64.(data[:y]);
+
 # Visualize data
-plt.hist(data[:y], bins=50, density=true)
+plt.hist(y, bins=50, density=true)
 plt.xlabel("y")
 plt.ylabel("density")
 plt.title("Histogram of data");
 
-# Convert data to vector of d# Set random seed for reproducibility
-Random.seed!(0);
+# Fit DP-SB-GMM with ADVI
 
-y = Float64.(data[:y])
+# Set random seed for reproducibility
+Random.seed!(3);  # 3 works
 
-# Fit Model (DP-SB-GMM)
-iterations = 500
-burn = 500
-numcomponents = 10
-stepsize = 0.01
-nleapfrog = floor(Int, 1 / stepsize)
+# Compile time approx: 1s
+# Run time approx: 8s
 
-# HMC
-# Compile time approx. 32s.
-# Run time approx. 70s.
-# @time chain = sample(dp_gmm_sb(y, numcomponents), 
-#                      HMC(stepsize, nleapfrog),
-#                      iterations + burn)
+# Define mean approximation for posterior
+m = dp_gmm_sb(y, 10)
+q0 = Variational.meanfield(m)
 
-# NUTS
-# Compile time approx. 11s
-# Run time approx. 244s
-# Slower, but works a little better.
-iterations = 500
-nadapt = 500
-burn = 0
-target_accept_ratio = 0.8
-@time chain = sample(dp_gmm_sb(y, numcomponents),
-                     NUTS(nadapt, target_accept_ratio),
-                     iterations + nadapt);
+advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
+# NOTE: I can't get the other optimizers to work. So the timings may be overestimated.
+@time q = vi(m, advi, optimizer=Flux.ADAM(1e-2));
+# @time q = vi(m, advi, optimizer=RMSProp());  # a little slower, inference not as good.
+
+# Function for generating samples from approximate posterior
+nsamples = 1000
+qsamples = rand(q, nsamples)
+_, sym2range = Variational.bijector(m; sym_to_ranges = Val(true));
+extract(sym) = qsamples[collect(sym2range[sym][1]), :]
+
+# Extract eta
+vpost = extract(:v)
+etapost = hcat([BnpUtil.stickbreak(vpost[:, col]) for col in 1:size(vpost, 2)]...)';
+
+plt.figure(figsize=(7, 4))
+
+plt.subplot(2, 2, 1)
+plt.boxplot(etapost, whis=[2.5, 97.5], showmeans=true, showfliers=false);
+foreach(line -> plt.axhline(line, ls=":"), data[:w])
+plt.xlabel("mixture component")
+plt.ylabel("η")
+
+plt.subplot(2, 2, 2)
+plt.boxplot(extract(:mu)', whis=[2.5, 97.5], showmeans=true, showfliers=false);
+foreach(line -> plt.axhline(line, ls=":"), data[:mu])
+plt.xlabel("mixture component")
+plt.ylabel("μ")
+
+plt.subplot(2, 2, 3)
+plt.boxplot(extract(:sig)', whis=[2.5, 97.5], showmeans=true, showfliers=false);
+foreach(line -> plt.axhline(line, ls=":"), data[:sig])
+plt.xlabel("mixture component")
+plt.ylabel("σ")
+
+plt.subplot(2, 2, 4)
+plt.hist(extract(:alpha)', density=true, bins=30)
+plt.xlabel("α")
+plt.ylabel("density")
+
+plt.tight_layout();
 
 function extract(chain, sym; burn=0)
     tail  = chain[sym].value.data[(burn + 1):end, :, :]
     return dropdims(tail, dims=3)
 end
 
-vpost = extract(chain, :v, burn=burn);
-mupost = extract(chain, :mu, burn=burn);
-sigpost = extract(chain, :sig, burn=burn);
-etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+# Fit DP-SB-GMM with HMC
 
-function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), burn=0)
+# Set random seed for reproducibility
+Random.seed!(0);
+
+# Compile time approx. 32s.
+# Run time approx. 70s.
+
+@time hmc_chain = begin
+    burn = 500  # NOTE: The burn in is also returned. Can't be discarded.
+    n_samples = 500
+    iterations = burn + n_samples
+    n_components = 10
+    stepsize = 0.01
+    nleapfrog = floor(Int, 1 / stepsize)
+ 
+    sample(dp_gmm_sb(y, n_components), 
+           HMC(stepsize, nleapfrog),
+           iterations)
+end
+;
+
+# Fit DP-SB-GMM with NUTS
+
+# Set random seed for reproducibility
+Random.seed!(0);
+
+# NUTS
+# Compile time approx. 11s
+# Run time approx. 244s
+# Slower, but works a little better.
+@time nuts_chain = begin
+    n_components = 10
+    n_samples = 500
+    nadapt = 500
+    iterations = n_samples + nadapt
+    burn = 0  # For compatibility with HMC below.
+    target_accept_ratio = 0.8
+    
+    sample(dp_gmm_sb(y, n_components),
+           NUTS(nadapt, target_accept_ratio, max_depth=10),
+           # NUTS(nadapt, target_accept_ratio, max_depth=5),  # 50s, but poor inference.
+           iterations);
+end
+;
+
+function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), truth=nothing)
     plt.figure(figsize=figsize)
 
     plt.subplot(1, 2, 1)
@@ -99,6 +167,12 @@ function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), bu
     plt.xlabel("mixture components")
     plt.ylabel(param_full_name)
     plt.title("95% Credible Intervals for $(param_full_name)")
+    
+    if truth != nothing
+        for line in truth
+            plt.axhline(line, ls=":")
+        end
+    end
 
     plt.subplot(1, 2, 2)
     plt.plot(param)
@@ -107,43 +181,35 @@ function plot_param_post(param, param_name, param_full_name; figsize=(10, 4), bu
     plt.title("Trace plot of $(param_full_name)");
 end
 
-plot_param_post(etapost, :eta, "mixture weights (η)", burn=burn)
+function plot_all_params(param; burn)
+    vpost = extract(param, :v, burn=burn);
+    mupost = extract(param, :mu, burn=burn);
+    sigpost = extract(param, :sig, burn=burn);
+    etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+    
+    plt.figure(figsize=(11, 4))
+    plt.subplot(1, 2, 1)
+    
+    # Loglikelihood can be extracted after model fitting using string macro.
+    # See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
+    loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=param"
+    plt.plot(loglike[(burn+1):end])
+    plt.xlabel("iteration (post-burn)")
+    plt.ylabel("Log likelihood")
+    
+    plt.subplot(1, 2, 2)
+    plt.hist(vec(param[:alpha].value), density=true, bins=30)
+    plt.xlabel("α")
+    plt.ylabel("density")
+    plt.title("Histogram of mass parameter α"); 
+    
+    plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
+    plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
+    plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
+end
 
-plot_param_post(mupost, :mu, "mixture means (μ)", burn=burn)
+plot_all_params(hmc_chain, burn=500);
 
-plot_param_post(sigpost, :sigma, "mixture scales (σ)", burn=burn)
-
-# TODO: How to get loglikelihood / log posterior?
-
-# Plot posterior distribution of number of clusters
-
-# Set a threshold for clusters to be considered as significant.
-thresh = 0.01
-
-plt.figure(figsize=(10, 4))
-
-# Trace plot
-plt.subplot(1, 2, 1)
-plt.plot(sum(etapost .> thresh, dims=2))
-plt.xlabel("iteration")
-plt.ylabel("Number of components > $thresh")
-plt.title("Trace plot of number of active components");
-
-# Bar plot
-plt.subplot(1, 2, 2)
-ncomponents_post = vec(sum(etapost .> thresh, dims=2))
-num_samples = length(ncomponents_post)
-countmap_ncomponents = countmap(ncomponents_post)
-x_ncomp = Int.(keys(countmap_ncomponents))
-y_prop = Int.(values(countmap_ncomponents)) / num_samples
-plt.bar(x_ncomp, y_prop)
-plt.xlabel("Number of active components")
-plt.ylabel("Posterior probability")
-plt.title("Distribution of number of active components");
-
-plt.hist(vec(chain[:alpha].value), density=true, bins=30)
-plt.xlabel("α")
-plt.ylabel("density")
-plt.title("Histogram of mass parameter α");
+plot_all_params(nuts_chain, burn=0);
 
 
