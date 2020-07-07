@@ -16,3 +16,6 @@ body {
   font-size: 21px;
   font-weight: 300;
 }
+.mjx-chtml {
+  font-size: 100% !important;
+}
