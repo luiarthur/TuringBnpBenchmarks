@@ -4,6 +4,7 @@ subtitle: "GSoC 2020 Turing.jl Project"
 email: luiarthur@gmail.com
 description: "Benchmarks for Bayesian nonparametric models implemented in various PPLs."
 google_analytics: UA-135308301-2
+github_repo: https://github.com/luiarthur/TuringBnpBenchmarks
 
 plugins:
   # search engine optimization

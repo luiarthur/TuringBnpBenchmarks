@@ -1,5 +1,7 @@
 all: script 
 
+docs-nb-html-dir = ../../docs/_posts/nb-html
+
 execute-all-notebooks:
 	for fname in `ls notebooks/*.ipynb`; do \
 		jupyter nbconvert \
@@ -25,12 +27,13 @@ script:
 		done
 
 html:
-	mkdir -p html
+	mkdir -p $(docs-nb-html-dir)
 	for fname in `ls notebooks/*.ipynb`; do \
 		jupyter-nbconvert $$fname \
 		--to=html --template=basic \
-		--output-dir=html --template=basic \
+		--output-dir=$(docs-nb-html-dir) --template=basic \
 		--HTMLExporter.anchor_link_text=' ' \
 		--TemplateExporter.exclude_input_prompt=True; \
 		done
+
 
