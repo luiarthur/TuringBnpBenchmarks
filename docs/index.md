@@ -9,7 +9,7 @@ Check out this <a href="{{site.baseurl}}/test-page.html"> test page</a>!
 It is way more interesting. 
 -->
 
-Hi! Int This site, I benchmark several probabilistic programming languages
+Hi! In this site, I benchmark several probabilistic programming languages
 (PPLs) including [`Turing.jl`][1], [`STAN`][2], [`TensorFlow Probability`][3],
 [`Pyro`][4], and [`NIMBLE`][5] for fitting common Bayesian nonparametric (BNP)
 models. This project is funded by [Google Summer of Code][6] 2020 and led by
