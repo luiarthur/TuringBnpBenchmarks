@@ -58,8 +58,8 @@ generated quantities {
 }
 """
 
-# Compile the model.
-get_ipython().run_line_magic('time', 'sm = pystan.StanModel(model_code=model)')
+# Compile the stan model.
+sm = pystan.StanModel(model_code=model)
 
 # Approximate posterior via ADVI
 # - ADVI is sensitive to starting values. Should run several times and pick run 
@@ -70,17 +70,10 @@ fit = sm.vb(data=data, iter=1000, seed=1, algorithm='meanfield',
             adapt_iter=1000, verbose=False, grad_samples=1, elbo_samples=100,
             adapt_engaged=True, output_samples=1000)
 
-
-# MCMC setup
-
-# Number of burn in iterations
-burn = 500
-
-# Number of sampels to keep
-nsamples = 500
-
-# Number of MCMC (HMC / NUTS) iterations in total
-niters = burn + nsamples
+### Settings for MCMC ###
+burn = 500  # Number of burn in iterations
+nsamples = 500  # Number of sampels to keep
+niters = burn + nsamples  # Number of MCMC (HMC / NUTS) iterations in total
 
 # Sample from posterior via HMC
 # NOTE: num_leapfrog = int_time / stepsize.
