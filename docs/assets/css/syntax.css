@@ -26,19 +26,19 @@
   color: #f6aa11;
 }
 .highlight * .cm {
-  color: #75715e;
+  color: grey;;
 }
 .highlight * .cp {
-  color: #75715e;
+  color: grey;
 }
 .highlight * .c1 {
-  color: #75715e;
+  color: grey;
 }
 .highlight * .cs {
-  color: #75715e;
+  color: grey;
 }
 .highlight * .c, .highlight * .ch, .highlight * .cd, .highlight * .cpf {
-  color: #75715e;
+  color: grey;
 }
 .highlight * .err {
   color: #960050;
