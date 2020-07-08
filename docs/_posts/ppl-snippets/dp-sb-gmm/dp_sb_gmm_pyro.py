@@ -57,26 +57,18 @@ pyro.set_rng_seed(7)  # set random seed
 for step in range(2000):
     svi.step(y, 10)
 
-
-
 # Fit DP SB GMM via HMC
 pyro.clear_param_store()
 pyro.set_rng_seed(1)
-
-# Set up HMC sampler.
 kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1,
              target_accept_prob=0.8, adapt_step_size=False,
              adapt_mass_matrix=False)
 hmc = MCMC(kernel, num_samples=500, warmup_steps=500)
 hmc.run(y, 10)
 
-
-
 # Fit DP SB GMM via NUTS
 pyro.clear_param_store()
 pyro.set_rng_seed(1)
-
-# Set up NUTS sampler.
 kernel = NUTS(dp_sb_gmm, target_accept_prob=0.8)
 nuts = MCMC(kernel, num_samples=500, warmup_steps=500)
 nuts.run(y, 10)

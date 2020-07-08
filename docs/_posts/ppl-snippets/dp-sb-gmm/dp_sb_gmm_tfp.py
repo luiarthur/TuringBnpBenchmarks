@@ -4,7 +4,6 @@ def stickbreak(v):
     c_one = tf.pad(cumprod_one_minus_v, [[1, 0]], "CONSTANT", constant_values=1)
     return one_v * c_one 
 
-
 # See: https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/MixtureSameFamily
 # See: https://www.tensorflow.org/probability/examples/Bayesian_Gaussian_Mixture_Model
 def create_dp_sb_gmm(nobs, K, dtype=np.float64):
@@ -34,10 +33,8 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
             sample_shape=nobs)
     ))
 
-
 # NOTE: Not able to successfully implement ADVI in TFP due to lack of
 # documentation.
-
 
 # Create Model
 ncomponents = 10
@@ -71,7 +68,6 @@ bijectors = [
     tfb.Exp(),  # alpha
     tfb.Sigmoid()  # v
 ]
-
    
 print('Define sampler ...')
 @tf.function(autograph=False)
@@ -109,7 +105,6 @@ def sample(use_nuts, max_tree_depth=10):
 [mu, sigma, alpha, v], is_accepted = sample(use_nuts=False)  # 53 seconds.
 hmc_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v,
                   acceptance_rate=is_accepted.numpy().mean())
-
 
 # Run NUTS sampler
 [mu, sigma, alpha, v], is_accepted = sample(use_nuts=True)  # 9min 15s

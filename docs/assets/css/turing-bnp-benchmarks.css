@@ -19,3 +19,10 @@ body {
 .mjx-chtml {
   font-size: 100% !important;
 }
+/* syntax highlighting */
+.highlight * table td {
+  padding: 0px;
+}
+.highlight * td pre{
+  border: 0px;
+}

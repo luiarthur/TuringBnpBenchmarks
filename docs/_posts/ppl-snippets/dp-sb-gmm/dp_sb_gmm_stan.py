@@ -58,18 +58,14 @@ generated quantities {
 }
 """
 
-
 # Compile the model.
 get_ipython().run_line_magic('time', 'sm = pystan.StanModel(model_code=model)')
-
-
 
 # Approximate posterior via ADVI
 # - ADVI is sensitive to starting values. Should run several times and pick run 
 #   that has best fit (e.g. highest ELBO / logliklihood).
 # - Variational inference works better with more data. Inference is less accurate
 #   with small datasets, due to the variational approximation.
-
 fit = sm.vb(data=data, iter=1000, seed=1, algorithm='meanfield',
             adapt_iter=1000, verbose=False, grad_samples=1, elbo_samples=100,
             adapt_engaged=True, output_samples=1000)
@@ -86,16 +82,12 @@ nsamples = 500
 # Number of MCMC (HMC / NUTS) iterations in total
 niters = burn + nsamples
 
-
 # Sample from posterior via HMC
 # NOTE: num_leapfrog = int_time / stepsize.
 hmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1,
                       seed=1, algorithm='HMC',
                       control=dict(stepsize=0.01, int_time=1))
 
-
-
 # Sample from posterior via NUTS
 nuts_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1,
                        seed=1)
-

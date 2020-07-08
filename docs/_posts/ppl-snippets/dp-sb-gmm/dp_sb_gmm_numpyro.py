@@ -33,7 +33,6 @@ class NormalMixture(dist.Distribution):
         lp = dist.Normal(self.mu, self.sigma).log_prob(y) + np.log(self.w)
         return logsumexp(lp, axis=axis)
 
-
 # DP SB GMM model.
 # NOTE: In numpyro, priors are assigned to parameters in the following manner:
 #
@@ -69,7 +68,6 @@ def dp_sb_gmm(y, num_components):
 # NOTE: Due to lack of documentation, I was not able to implement
 # an example via ADVI in numpyro.
 
-
 # Set random seed for reproducibility.
 rng_key = random.PRNGKey(0)
 
@@ -79,7 +77,6 @@ kernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1)
 hmc = MCMC(kernel, num_samples=500, num_warmup=500)
 hmc.run(rng_key, y, 10)
 hmc_samples = get_posterior_samples(hmc)
-
 
 # FIT DP SB GMM via NUTS
 kernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)
