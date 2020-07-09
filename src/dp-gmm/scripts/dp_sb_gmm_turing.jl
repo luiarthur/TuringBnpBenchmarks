@@ -7,6 +7,7 @@ import Pkg; Pkg.activate("../../../")
 # Import Libraries
 using Turing
 using Turing: Variational
+using Turing.RandomMeasures: stickbreak
 using Distributions
 using JSON3
 using PyPlot
@@ -14,7 +15,6 @@ using StatsFuns
 import Random
 using BenchmarkTools
 using Flux
-include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
 # DP GMM model under stick-breaking construction
 @model dp_gmm_sb(y, K) = begin
@@ -25,7 +25,7 @@ include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
     v ~ filldist(Beta(1, alpha), K - 1)
-    eta = BnpUtil.stickbreak(v)
+    eta = stickbreak(v)
 
     # NOTE: Slow. And the MCMC gets stuck?
     # y .~ MixtureModel(Normal.(mu, sig), eta)
@@ -57,18 +57,19 @@ plt.title("Histogram of data");
 # Fit DP-SB-GMM with ADVI
 
 # Set random seed for reproducibility
-Random.seed!(3);  # 3 works
+Random.seed!(10);
 
 # Compile time approx: 1s
 # Run time approx: 8s
 
 # Define mean approximation for posterior
 m = dp_gmm_sb(y, 10)
-q0 = Variational.meanfield(m)
-
+q0 = Variational.meanfield(m)  # initialize variational distribution (optional)
 advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
-# NOTE: I can't get the other optimizers to work. So the timings may be overestimated.
-@time q = vi(m, advi, optimizer=Flux.ADAM(1e-2));
+@time q = vi(m, advi, q0, optimizer=Flux.ADAM(1e-2));
+
+# NOTE: I can't get the other optimizers to work. 
+# So the timings may be overestimated.
 # @time q = vi(m, advi, optimizer=RMSProp());  # a little slower, inference not as good.
 
 # Function for generating samples from approximate posterior
@@ -79,7 +80,7 @@ extract(sym) = qsamples[collect(sym2range[sym][1]), :]
 
 # Extract eta
 vpost = extract(:v)
-etapost = hcat([BnpUtil.stickbreak(vpost[:, col]) for col in 1:size(vpost, 2)]...)';
+etapost = hcat([stickbreak(vpost[:, col]) for col in 1:size(vpost, 2)]...)';
 
 plt.figure(figsize=(7, 4))
 
@@ -108,8 +109,14 @@ plt.ylabel("density")
 
 plt.tight_layout();
 
-function extract(chain, sym; burn=0)
-    tail  = chain[sym].value.data[(burn + 1):end, :, :]
+function extract(chain, sym; burn=0, idx=nothing)
+    if idx == nothing
+        tail = chain[sym].value.data[(burn + 1):end, :, :]
+    else
+        sym = String(sym)
+        syms = [Symbol("$(sym)[$i]") for i in idx]
+        tail = chain[syms].value.data[(burn + 1):end, :, :]
+    end
     return dropdims(tail, dims=3)
 end
 
@@ -179,37 +186,42 @@ function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), tr
     plt.xlabel("iterations")
     plt.ylabel(param_full_name)
     plt.title("Trace plot of $(param_full_name)");
+    
+    plt.tight_layout();
 end
 
-function plot_all_params(param; burn)
-    vpost = extract(param, :v, burn=burn);
-    mupost = extract(param, :mu, burn=burn);
-    sigpost = extract(param, :sig, burn=burn);
-    etapost = hcat([BnpUtil.stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
+function plot_all_params(param; burn, figsize=(11, 4))
+    vpost = extract(param, :v, burn=burn, idx=1:(n_components-1));
+    mupost = extract(param, :mu, burn=burn, idx=1:n_components);
+    sigpost = extract(param, :sig, burn=burn, idx=1:n_components);
+    etapost = hcat([stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
     
-    plt.figure(figsize=(11, 4))
+    plt.figure(figsize=figsize)
     plt.subplot(1, 2, 1)
-    
+
     # Loglikelihood can be extracted after model fitting using string macro.
     # See: https://turing.ml/dev/docs/using-turing/guide#querying-probabilities-from-model-or-chain
-    loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=param"
-    plt.plot(loglike[(burn+1):end])
-    plt.xlabel("iteration (post-burn)")
-    plt.ylabel("Log likelihood")
     
+    # FIXME: not working on master branch.
+    # loglike = logprob"y=y, K=n_components | model=dp_gmm_sb, chain=param"
+    # plt.plot(loglike[(burn+1):end])
+    # plt.xlabel("iteration (post-burn)")
+    # plt.ylabel("Log likelihood")
+
     plt.subplot(1, 2, 2)
-    plt.hist(vec(param[:alpha].value), density=true, bins=30)
+    plt.hist(vec(param[:alpha].data), density=true, bins=30)
     plt.xlabel("α")
     plt.ylabel("density")
     plt.title("Histogram of mass parameter α"); 
+    plt.tight_layout();
     
-    plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w]);
-    plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu]);
-    plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig]);
+    plot_param_post(etapost, :eta, "mixture weights (η)", truth=data[:w], figsize=figsize);
+    plot_param_post(mupost, :mu, "mixture means (μ)", truth=data[:mu], figsize=figsize);
+    plot_param_post(sigpost, :sigma, "mixture scales (σ)", truth=data[:sig], figsize=figsize);
 end
 
-plot_all_params(hmc_chain, burn=500);
+plot_all_params(hmc_chain, burn=500, figsize=(8, 3));
 
-plot_all_params(nuts_chain, burn=0);
+plot_all_params(nuts_chain, burn=0, figsize=(8, 3));
 
 

@@ -1,20 +1,3 @@
-# Stick break function
-function stickbreak(v)
-    K = length(v) + 1
-    cumprod_one_minus_v = cumprod(1 .- v)
-
-    eta = [if k == 1 
-               v[1]
-           elseif k == K
-               cumprod_one_minus_v[K-1]
-           else
-               v[k] * cumprod_one_minus_v[k-1]
-           end
-           for k in 1:K]
-
-    return eta
-end
-
 # DP GMM model under stick-breaking construction
 @model dp_gmm_sb(y, K) = begin
     nobs = length(y)
@@ -31,8 +14,8 @@ end
 end
 
 # NOTE: 
-# Here, y are noisy univariate draws from a mixture distribution with
-# 4 components.
+# Here, y (a vector of length 500) is noisy univariate draws from a mixture
+# distribution with 4 components.
 
 # Fit DP-SB-GMM with ADVI
 advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
