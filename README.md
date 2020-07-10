@@ -3,6 +3,9 @@ Benchmarks of Bayesian Nonparametric models in Turing and other PPLs.
 
 This work is funded by [GSoC 2020][1].
 
+My mentors for this project are [Hong Ge][3], [Martin Trapp][4], and 
+[Cameron Pfiffer][5].
+
 ## Abstract
 Probabilistic models, which more naturally quantify uncertainty when compared
 to their deterministic counterparts, are often difficult and tedious to
@@ -76,3 +79,6 @@ The following software was used:
 
 [1]: https://summerofcode.withgoogle.com/projects/#5861616765108224
 [2]: https://aws.amazon.com/ec2/instance-types/c5/
+[3]: http://mlg.eng.cam.ac.uk/hong/ 
+[4]: https://martintdotblog.wordpress.com/
+[5]: http://cameron.pfiffer.org/
