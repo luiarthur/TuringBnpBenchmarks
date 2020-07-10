@@ -1,3 +1,5 @@
+# import libraries here ...
+
 def stickbreak(v):
     cumprod_one_minus_v = tf.math.cumprod(1 - v)
     one_v = tf.pad(v, [[0, 1]], "CONSTANT", constant_values=1)
@@ -33,12 +35,16 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
             sample_shape=nobs)
     ))
 
+# NOTE: Read data y here ...
+# Here, y (a vector of length 500) is noisy univariate draws from a
+# mixture distribution with 4 components.
+
 # NOTE: Not able to successfully implement ADVI in TFP due to lack of
 # documentation.
 
 # Create Model
 ncomponents = 10
-model = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)
+model = create_dp_sb_gmm(nobs=len(y), K=ncomponents)
 
 # Define log joint density.
 def joint_log_prob(obs, mu, sigma, alpha, v):
@@ -56,10 +62,11 @@ initial_state = [
     tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')
 ]
 
-# Create bijectors to transform unconstrained to and from constrained parameters-space.
-# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation
-# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used
-# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).
+# Create bijectors to transform unconstrained to and from constrained
+# parameters-space. For example, if X ~ Exponential(theta), then X is
+# constrained to be positive. A transformation that puts X onto an
+# unconstrained space is Y = log(X). In that case, the bijector used should be
+# the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).
 
 # Define the inverse-transforms for each parameter in sequence.
 bijectors = [

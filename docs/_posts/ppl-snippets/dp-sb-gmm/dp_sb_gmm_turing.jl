@@ -15,11 +15,12 @@
 
     log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
     Turing.acclogp!(_varinfo, sum(log_target))
+    # NOTE: `_varinfo` is a Turing variable that stores model information,
+    # including log joint density.
 end
 
 # NOTE: Read data y here ...
-
-# NOTE: Here, y (a vector of length 500) is noisy univariate draws from a
+# Here, y (a vector of length 500) is noisy univariate draws from a
 # mixture distribution with 4 components.
 
 # Fit DP-SB-GMM with ADVI

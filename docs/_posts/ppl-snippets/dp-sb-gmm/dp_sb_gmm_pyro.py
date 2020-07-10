@@ -1,3 +1,5 @@
+# import libraries here ...
+
 # Stick break function
 # See: https://pyro.ai/examples/dirichlet_process_mixture.html
 def stickbreak(v):
@@ -44,6 +46,11 @@ def dp_sb_gmm(y, num_components):
     with pyro.plate('data', N):
         label = pyro.sample('label', dist.Categorical(eta), infer={"enumerate": "parallel"})
         pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
+
+
+# NOTE: Read data y here ...
+# Here, y (a vector of length 500) is noisy univariate draws from a
+# mixture distribution with 4 components.
 
 # Fit DP SB GMM via ADVI
 # See: https://pyro.ai/examples/dirichlet_process_mixture.html

@@ -1,3 +1,5 @@
+# import libraries here ...
+
 model = """
 data {
   int<lower=0> K;  // Number of cluster
@@ -60,6 +62,14 @@ generated quantities {
 
 # Compile the stan model.
 sm = pystan.StanModel(model_code=model)
+
+# NOTE: Read data y here ...
+# Here, y (a vector of length 500) is noisy univariate draws from a
+# mixture distribution with 4 components.
+
+# Construct data dictionary.
+data = dict(y=simdata['y'], K=10, N=len(simdata['y']),
+            alpha_shape=1, alpha_rate=10, sigma_shape=1, sigma_rate=10)
 
 # Approximate posterior via ADVI
 # - ADVI is sensitive to starting values. Should run several times and pick run 

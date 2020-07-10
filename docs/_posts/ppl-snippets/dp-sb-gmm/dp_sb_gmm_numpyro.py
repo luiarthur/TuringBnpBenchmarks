@@ -1,3 +1,5 @@
+# import some libraries here...
+
 # Stick break function
 def stickbreak(v):
     cumprod_one_minus_v = np.exp(np.log1p(-v).cumsum(-1))
@@ -64,6 +66,10 @@ def dp_sb_gmm(y, num_components):
 
     with numpyro.plate('data', N):
         numpyro.sample('obs', NormalMixture(mu[None, :] , sigma[None, :], eta[None, :]), obs=y[:, None])
+
+# NOTE: Read data y here ...
+# Here, y (a vector of length 500) is noisy univariate draws from a
+# mixture distribution with 4 components.
 
 # NOTE: Due to lack of documentation, I was not able to implement
 # an example via ADVI in numpyro.
