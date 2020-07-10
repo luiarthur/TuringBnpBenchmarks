@@ -40,38 +40,20 @@ chain[:sigma]  # works for univariate parameters
 #  0.6036546321663407
 
 # FIXME: Get mu
-chain[:mu]  # broken
-
-# ERROR: ArgumentError: index mu not found
-# Stacktrace:
-#  [1] axisindexes at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/src/indexing.jl:317 [inlined]
-#  [2] axisindexes at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/src/indexing.jl:199 [inlined]
-#  [3] macro expansion at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/src/indexing.jl:394 [inlined]
-#  [4] _to_index(::AxisArrays.AxisArray{Float64,3,Array{Float64,3},Tuple{AxisArrays.Axis{:iter,StepRange{Int64,Int64}},Ax
-# isArrays.Axis{:var,Array{Symbol,1}},AxisArrays.Axis{:chain,UnitRange{Int64}}}}, ::Tuple{AxisArrays.Unsupported,AxisArra
-# ys.Unsupported,AxisArrays.Unsupported}, ::Colon, ::Symbol, ::Colon) at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/sr
-# c/indexing.jl:350
-#  [5] to_index at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/src/indexing.jl:347 [inlined]
-#  [6] getindex at /home/ubuntu/.julia/packages/AxisArrays/IFpjG/src/indexing.jl:123 [inlined]
-#  [7] getindex(::Chains{Float64,AxisArrays.AxisArray{Float64,3,Array{Float64,3},Tuple{AxisArrays.Axis{:iter,StepRange{In
-# t64,Int64}},AxisArrays.Axis{:var,Array{Symbol,1}},AxisArrays.Axis{:chain,UnitRange{Int64}}}},Missing,NamedTuple{(:param
-# eters, :internals),Tuple{Array{Symbol,1},Array{Symbol,1}}},NamedTuple{(),Tuple{}}}, ::Function, ::Symbol, ::Function) a
-# t /home/ubuntu/.julia/packages/MCMCChains/EaAHc/src/chains.jl:113
-#  [8] getindex(::Chains{Float64,AxisArrays.AxisArray{Float64,3,Array{Float64,3},Tuple{AxisArrays.Axis{:iter,StepRange{In
-# t64,Int64}},AxisArrays.Axis{:var,Array{Symbol,1}},AxisArrays.Axis{:chain,UnitRange{Int64}}}},Missing,NamedTuple{(:param
-# eters, :internals),Tuple{Array{Symbol,1},Array{Symbol,1}}},NamedTuple{(),Tuple{}}}, ::Symbol) at /home/ubuntu/.julia/pa
-# ckages/MCMCChains/EaAHc/src/chains.jl:110
-#  [9] top-level scope at REPL[87]:1
+# chain[:mu]  # broken
 
 # Workarouund for getting array parameters
-function extract_array_param(chain, sym)
-    rgx = Regex("$(sym)\\[\\d+(,\\d+)*\\]")
-    syms = filter(x -> x != nothing, match.(rgx, String.(chain.name_map[1])))
-    syms = map(x -> Symbol(x.match), syms)
-    return chain[syms]
-end
+# function extract_array_param(chain, sym)
+#     rgx = Regex("$(sym)\\[\\d+(,\\d+)*\\]")
+#     syms = filter(x -> x != nothing, match.(rgx, String.(chain.name_map[1])))
+#     syms = map(x -> Symbol(x.match), syms)
+#     return chain[syms]
+# end
+# 
+# extract_array_param(chain, :mu)
 
-extract_array_param(chain, :mu)
+# This has been fixed.
+group(chain, :mu)
 
 # FIXME: Get log-likelihood.
 loglike = logprob"y=y | model=demo_model, chain=chain"  # broken
