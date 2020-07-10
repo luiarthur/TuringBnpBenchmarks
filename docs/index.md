@@ -16,6 +16,8 @@ models. This project is funded by [Google Summer of Code][6] 2020 and led by
 the `Turing` team. See the [GitHub repo][7] for more on the motivation for this
 project.
 
+My mentors for this project are [Hong Ge][8], [Martin Trapp][9], and 
+[Cameron Pfiffer][10].
 
 ## Posts
 
@@ -44,3 +46,6 @@ project.
 [5]: https://r-nimble.org/
 [6]: https://summerofcode.withgoogle.com/
 [7]: {{site.github_repo}}
+[8]: http://mlg.eng.cam.ac.uk/hong/ 
+[9]: https://martintdotblog.wordpress.com/
+[10]: http://cameron.pfiffer.org/
