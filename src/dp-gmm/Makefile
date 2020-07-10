@@ -36,4 +36,5 @@ html:
 		--TemplateExporter.exclude_input_prompt=True; \
 		done
 
-
+parse_times:
+	cd util && python3 parse_timings.py
