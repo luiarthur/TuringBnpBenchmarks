@@ -1,3 +1,5 @@
+# NOTE: Import libraries here ...
+
 # DP GMM model under stick-breaking construction
 @model dp_gmm_sb(y, K) = begin
     nobs = length(y)
@@ -7,15 +9,18 @@
 
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
     v ~ filldist(Beta(1, alpha), K - 1)
-    eta = BnpUtil.stickbreak(v)
+    eta = stickbreak(v)  # named w in the blog post.
+    # NOTE: `stickbreak` is currently only on the master branch of Turing.jl,
+    # but should be included in the next Turing release.
 
     log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
     Turing.acclogp!(_varinfo, sum(log_target))
 end
 
-# NOTE: 
-# Here, y (a vector of length 500) is noisy univariate draws from a mixture
-# distribution with 4 components.
+# NOTE: Read data y here ...
+
+# NOTE: Here, y (a vector of length 500) is noisy univariate draws from a
+# mixture distribution with 4 components.
 
 # Fit DP-SB-GMM with ADVI
 advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
