@@ -33,6 +33,11 @@
     <!-- Regular Disquss -->
     <script src="{{ "/assets/js/disqus.js" | prepend: site.baseurl}}"></script>
 
+    <!-- Sort Table Functions-->
+    {% if page.sorttable %}
+    <script src="{{ "/assets/js/sort-table.js" | prepend: site.baseurl}}"></script>
+    {% endif %}
+
     {% if page.math %}
     <script type="text/x-mathjax-config">
       MathJax.Hub.Config({
