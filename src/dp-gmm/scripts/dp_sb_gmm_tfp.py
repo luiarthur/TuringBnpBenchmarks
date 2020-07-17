@@ -238,7 +238,7 @@ def target_log_prob_fn(mu, sigma, alpha, v):
 # 
 # Credits: Thanks to Dave Moore at bayesflow for helping with the implementation!
 
-# In[11]:
+# In[25]:
 
 
 # FIXME: This may need some tweaking.
@@ -272,13 +272,13 @@ surrogate_posterior = tfd.JointDistributionNamed(dict(
     alpha=tfd.LogNormal(qalpha_loc, tf.nn.softplus(qalpha_rho))))
 
 
-# In[12]:
+# In[26]:
 
 
-get_ipython().run_cell_magic('time', '', '# Run optimizer\nlosses = tfp.vi.fit_surrogate_posterior(\n    # target_log_prob_fn=model_log_prob,\n    target_log_prob_fn=target_log_prob_fn,\n    surrogate_posterior=surrogate_posterior,\n    optimizer=tf.optimizers.Adam(learning_rate=1e-2),  # 0.1, 0.01\n    sample_size=25,\n    seed=1, num_steps=10000)  # 200, 2000')
+get_ipython().run_cell_magic('time', '', '# Run optimizer\nlosses = tfp.vi.fit_surrogate_posterior(\n    # target_log_prob_fn=model_log_prob,\n    target_log_prob_fn=target_log_prob_fn,\n    surrogate_posterior=surrogate_posterior,\n    optimizer=tf.optimizers.Adam(learning_rate=1e-2),  # 0.1, 0.01\n    sample_size=100,\n    seed=1, num_steps=2000)  # 200, 2000')
 
 
-# In[13]:
+# In[27]:
 
 
 plt.plot(losses.numpy())
@@ -286,7 +286,7 @@ plt.xlabel('Optimizer Iteration')
 plt.ylabel('ELBO');
 
 
-# In[14]:
+# In[28]:
 
 
 # Extract posterior samples from VI
@@ -297,10 +297,73 @@ plot_all_params(advi_output, target_log_prob_fn)
 # ***
 # # MCMC
 
-# In[15]:
+# In[29]:
 
 
-get_ipython().run_cell_magic('time', '', "\n# Create initial values..\n# For HMC, NUTS. Not necessary for ADVI, as ADVI has surrogate_posterior.\ndef generate_initial_state(seed=None):\n    tf.random.set_seed(seed)\n    return [\n        tf.zeros(ncomponents, dtype, name='mu'),\n        tf.ones(ncomponents, dtype, name='sigma') * 0.1,\n        tf.ones([], dtype, name='alpha') * 0.5,\n        tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')\n    ]\n\n# Create bijectors to transform unconstrained to and from constrained parameters-space.\n# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation\n# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used\n# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).\n#\n# NOTE: Define the inverse-transforms for each parameter in sequence.\nbijectors = [\n    tfb.Identity(),  # mu\n    tfb.Exp(),  # sigma\n    tfb.Exp(),  # alpha\n    tfb.Sigmoid()  # v\n]\n\nprint('Define sampler ...')\n# You may get weird errors if you put certain things in here...\n# For example, I can't do generate_initial_state inside\n# the function. I supposed this has something to do with\n# the `tf.function` decorator.\n#\n# Improve performance by tracing the sampler using `tf.function`\n# and compiling it using XLA.\n@tf.function(autograph=False)\ndef sample(use_nuts, current_state, max_tree_depth=10):\n    if use_nuts:\n        ### NUTS ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.NoUTurnSampler(\n                     target_log_prob_fn=target_log_prob_fn,\n                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=500,  # should be smaller than burn-in.\n            target_accept_prob=0.8)\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n    else:\n        ### HMC ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(\n                    target_log_prob_fn=target_log_prob_fn,\n                    step_size=0.01, num_leapfrog_steps=100, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=500)  # should be smaller than burn-in.\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n        \n    return tfp.mcmc.sample_chain(\n        num_results=500,\n        num_burnin_steps=500,\n        current_state=current_state,\n        # current_state=initial_states,\n        kernel=kernel,\n        trace_fn=trace_fn)")
+# Create initial values..
+# For HMC, NUTS. Not necessary for ADVI, as ADVI has surrogate_posterior.
+def generate_initial_state(seed=None):
+    tf.random.set_seed(seed)
+    return [
+        tf.zeros(ncomponents, dtype, name='mu'),
+        tf.ones(ncomponents, dtype, name='sigma') * 0.1,
+        tf.ones([], dtype, name='alpha') * 0.5,
+        tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')
+    ]
+
+# Create bijectors to transform unconstrained to and from constrained parameters-space.
+# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation
+# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used
+# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).
+#
+# NOTE: Define the inverse-transforms for each parameter in sequence.
+bijectors = [
+    tfb.Identity(),  # mu
+    tfb.Exp(),  # sigma
+    tfb.Exp(),  # alpha
+    tfb.Sigmoid()  # v
+]
+
+# Compile time negligible.
+print('Define sampler ...')
+# You may get weird errors if you put certain things in here...
+# For example, I can't do generate_initial_state inside
+# the function. I supposed this has something to do with
+# the `tf.function` decorator.
+#
+# Improve performance by tracing the sampler using `tf.function`
+# and compiling it using XLA.
+@tf.function(autograph=False)
+def sample(use_nuts, current_state, max_tree_depth=10):
+    if use_nuts:
+        ### NUTS ###
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
+            tfp.mcmc.TransformedTransitionKernel(
+                inner_kernel=tfp.mcmc.NoUTurnSampler(
+                     target_log_prob_fn=target_log_prob_fn,
+                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),
+                bijector=bijectors),
+            num_adaptation_steps=500,  # should be smaller than burn-in.
+            target_accept_prob=0.8)
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
+    else:
+        ### HMC ###
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
+            tfp.mcmc.TransformedTransitionKernel(
+                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
+                    target_log_prob_fn=target_log_prob_fn,
+                    step_size=0.01, num_leapfrog_steps=100, seed=1),
+                bijector=bijectors),
+            num_adaptation_steps=500)  # should be smaller than burn-in.
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
+        
+    return tfp.mcmc.sample_chain(
+        num_results=500,
+        num_burnin_steps=500,
+        current_state=current_state,
+        # current_state=initial_states,
+        kernel=kernel,
+        trace_fn=trace_fn)
 
 
 # ## HMC

@@ -72,10 +72,10 @@ def get_dp_sb_gmm_tfp_times(path):
     t = list(map(sanitize_py, t))
     return dict(model='dp_sb_gmm',
                 ppl='tfp',
-                advi_compile=np.nan,
+                advi_compile=0,
                 hmc_compile=0,
                 nuts_compile=0,
-                advi_run=np.nan,
+                advi_run=t[0],
                 hmc_run=t[1],
                 nuts_run=t[2])
 
