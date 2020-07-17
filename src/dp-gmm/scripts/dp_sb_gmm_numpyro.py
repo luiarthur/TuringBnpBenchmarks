@@ -30,14 +30,6 @@ import numpy as onp
 # In[40]:
 
 
-# TFP:
-# def stickbreak(v):
-#     batch_ndims = len(v.shape) - 1
-#     cumprod_one_minus_v = tf.math.cumprod(1 - v, axis=-1)
-#     one_v = tf.pad(v, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
-#     c_one = tf.pad(cumprod_one_minus_v, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
-#     return one_v * c_one
-
 # Stick break function
 def stickbreak(v):
     batch_ndims = len(v.shape) - 1
