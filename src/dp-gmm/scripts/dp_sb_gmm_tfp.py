@@ -59,7 +59,6 @@ tf.random.set_seed(1)
 
 # Thanks to Dave Moore for extending this to work with batch dimensions!
 # This turns out to be necessary for ADVI to work properly.
-# FIXME: doesn't sum to 1.
 def stickbreak(v):
     batch_ndims = len(v.shape) - 1
     cumprod_one_minus_v = tf.math.cumprod(1 - v, axis=-1)
@@ -241,10 +240,9 @@ def target_log_prob_fn(mu, sigma, alpha, v):
 # In[25]:
 
 
-# FIXME: This may need some tweaking.
-
-# This cell contains everything for initializing the variational distribution,
-# which approximates the true posterior.
+# This cell contains everything for initializing the 
+# variational distribution, which approximates the true posterior.
+# ADVI is quite sensitive to initial distritbution.
 tf.random.set_seed(7) # 7
 
 # Create variational parameters.
@@ -324,8 +322,8 @@ bijectors = [
     tfb.Sigmoid()  # v
 ]
 
-# Compile time negligible.
 print('Define sampler ...')
+# Compile time negligible.
 # You may get weird errors if you put certain things in here...
 # For example, I can't do generate_initial_state inside
 # the function. I supposed this has something to do with
