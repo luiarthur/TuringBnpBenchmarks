@@ -12,14 +12,15 @@ print('Last updated:', datetime.datetime.now(), '(PT)')
 # In[2]:
 
 
-import functools
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
-tfd = tfp.distributions
-tfb = tfp.bijectors
+from tensorflow_probability import distributions as tfd
+from tensorflow_probability import bijectors as tfb
+
+# Default data type for tensorflow tensors.
 dtype = tf.float64
 
 # Resources for learning TFP
@@ -45,14 +46,36 @@ tf.random.set_seed(1)
 # In[4]:
 
 
-def stickbreak(v):
-    cumprod_one_minus_v = tf.math.cumprod(1 - v)
-    one_v = tf.pad(v, [[0, 1]], "CONSTANT", constant_values=1)
-    c_one = tf.pad(cumprod_one_minus_v, [[1, 0]], "CONSTANT", constant_values=1)
-    return one_v * c_one 
-
+# NOTE: This version does not work with batch dimensions.
+#
+# def stickbreak(v):
+#     cumprod_one_minus_v = tf.math.cumprod(1 - v)
+#     one_v = tf.pad(v, [[0, 1]], "CONSTANT", constant_values=1)
+#     c_one = tf.pad(cumprod_one_minus_v, [[1, 0]], "CONSTANT", constant_values=1)
+#     return one_v * c_one 
+#
 # Example:
 # stickbreak(np.random.rand(3))
+
+# Thanks to Dave Moore for extending this to work with batch dimensions!
+# This turns out to be necessary for ADVI to work properly.
+# FIXME: doesn't sum to 1.
+def stickbreak(v):
+    batch_ndims = len(v.shape) - 1
+    cumprod_one_minus_v = tf.math.cumprod(1 - v, axis=-1)
+    one_v = tf.pad(v, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
+    c_one = tf.pad(cumprod_one_minus_v, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
+    return one_v * c_one
+
+# Example:
+# stickbreak(np.random.rand(2, 3))  # Last dimension is the number of sticks breaks.
+# Returns a tensor of shape(2, 4).
+#
+# stickbreak(np.random.rand(2, 3, 4))  # Last dimension is the number of sticks breaks.
+# Returns a tensor of shape(2, 3, 5).
+#
+# The last dimensions sum to 1.
+# stickbreak(np.random.randn(2,3,4)).numpy().sum(-1)
 
 
 # In[5]:
@@ -69,15 +92,23 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
         ),
         # Mixture scales
         sigma = tfd.Independent(
-            tfd.Gamma(concentration=np.ones(K, dtype), rate=10),
+            # tfd.Gamma(concentration=np.ones(K, dtype), rate=10),
+            tfd.LogNormal(loc=np.full(K, - 2, dtype), scale=0.5),
             reinterpreted_batch_ndims=1
         ),
         # Mixture weights (stick-breaking construction)
         alpha = tfd.Gamma(concentration=np.float64(1.0), rate=10.0),
+        # alpha = tfd.LogNormal(loc=np.float64(0.0), scale=1.0),
+        # alpha = tfd.LogNormal(loc=np.float64(-1), scale=0.1),
         v = lambda alpha: tfd.Independent(
-            tfd.Beta(np.ones(K - 1, dtype), alpha),
+            # tfd.Beta(np.ones(K - 1, dtype), alpha),
+            # NOTE: Dave Moore suggests doing this instead, to ensure 
+            # that a batch dimension in alpha doesn't conflict with 
+            # the other parameters.
+            tfd.Beta(np.ones(K - 1, dtype), alpha[..., tf.newaxis]),
             reinterpreted_batch_ndims=1
         ),
+        # Alternatively,
         # v = tfd.Dirichlet(np.ones(K, dtype) / K),
 
         # Observations (likelihood)
@@ -89,22 +120,13 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
             sample_shape=nobs)
     ))
 
-
-# In[6]:
-
-
-# Examples:
-# print(dp_sb_gmm.resolve_graph())
+# Example usages:
 # dp_sb_gmm = create_dp_sb_gmm(13, 5)
 # sample = dp_sb_gmm.sample()
 # dp_sb_gmm.log_prob(**sample)
-# sample
-
-
-# In[7]:
-
-
-# Example:
+# print(dp_sb_gmm.resolve_graph())
+# print(sample)
+#
 # dp_sb_gmm.log_prob(mu=tfd.Normal(np.float64(0), 1).sample(5),
 #                    sigma=tfd.Uniform(np.float64(0), 1).sample(5),
 #                    alpha=tf.cast(1, dtype),
@@ -112,99 +134,36 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
 #                    obs=np.random.randn(1000))
 
 
-# In[8]:
+# In[6]:
+
+
+# Make sure that `model.sample()` AND `model.sample(N)` works for N > 1!
+# create_dp_sb_gmm(13, 5).sample()
+# create_dp_sb_gmm(13, 5).sample((1,2))
+
+
+# In[7]:
 
 
 # Read simulated data.
 path_to_data = '../../data/sim-data/gmm-data-n200.json'
 with open(path_to_data) as f:
     simdata = json.load(f)
-    
-y = np.array(simdata['y'], np.float64)
+
+# Give data the correct type.
+y = np.array(simdata['y'], dtype=np.float64)
+
+# Plot histogram of data.
+plt.hist(y, density=True, bins=30)
+plt.xlabel('data (y)')
+plt.ylabel('density')
+plt.title('Histogram of data');
 
 
-# In[9]:
+# In[8]:
 
 
-get_ipython().run_cell_magic('time', '', "\nncomponents = 10\n\nprint('Create model ...')\nmodel = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)\n\nprint('Define log joint density ...')\ndef joint_log_prob(obs, mu, sigma, alpha, v):\n    return model.log_prob(obs=obs, \n                          mu=mu, sigma=sigma,\n                          alpha=alpha, v=v)\n    \n# Test log joint density evaluation\n# _ = joint_log_prob(y, \n#                    np.random.randn(10),\n#                    np.random.rand(10),\n#                    np.float64(1),\n#                    np.random.rand(9))\n\n# This is the same thing as:\n# \n#     def unnormalized_posterior_log_prob(mu, sigma, alpha, v):\n#         return joint_log_prob(y, mu, sigma, alpha, v)\n# \n# where y is captured from the environment.\nunnormalized_posterior_log_prob = functools.partial(joint_log_prob, y)\n\n# Create initial state?\n# Not sure though, because in ADVI, you can't directly initialize the parameters of interest;\n# instead you should initialize the hyperparameters in the variational distributions.\n# So, ot sure if this does anything useful.\ninitial_state = [\n    tf.zeros(ncomponents, dtype, name='mu'),\n    tf.ones(ncomponents, dtype, name='sigma') * .1,\n    tf.ones([], dtype, name='alpha'),\n    tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')\n]\n\n# Create bijectors to transform unconstrained to and from constrained parameters-space.\n# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation\n# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used\n# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).\n\n# Define the inverse-transforms for each parameter in sequence.\nbijectors = [\n    tfb.Identity(),  # mu\n    tfb.Exp(),  # sigma\n    tfb.Exp(),  # alpha\n    tfb.Sigmoid()  # v\n]\n\n   \nprint('Define sampler ...')\n@tf.function(autograph=False)\ndef sample(use_nuts, max_tree_depth=10):\n    if use_nuts:\n        ### NUTS ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.NoUTurnSampler(\n                     target_log_prob_fn=unnormalized_posterior_log_prob,\n                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=400,  # should be smaller than burn-in.\n            target_accept_prob=0.8)\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n    else:\n        ### HMC ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(\n                    target_log_prob_fn=unnormalized_posterior_log_prob,\n                    step_size=0.01, num_leapfrog_steps=100, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=400)  # should be smaller than burn-in.\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n\n    return tfp.mcmc.sample_chain(\n        num_results=500,\n        num_burnin_steps=500,\n        current_state=initial_state,\n        kernel=kernel,\n        trace_fn=trace_fn)")
-
-
-# In[10]:
-
-
-# FIXME: ADVI is not working in TFP.
-# ADVI
-# tfp.vi.monte_carlo_variational_loss?
-# 
-# qmu_loc = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64), name='qmu_loc')
-# qmu_rho = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64), name='qmu_rho')
-# 
-# qsigma_loc = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64) - 1, name='qsigma_loc')
-# qsigma_rho = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64), name='qsigma_rho')
-# 
-# qv_loc = tf.Variable(tf.random.normal([ncomponents - 1], dtype=np.float64), name='qv_loc')
-# qv_rho = tf.Variable(tf.random.normal([ncomponents - 1], dtype=np.float64), name='qv_rho')
-# 
-# qalpha_loc = tf.Variable(tf.random.normal([], dtype=np.float64), name='qalpha_loc')
-# qalpha_rho = tf.Variable(tf.random.normal([], dtype=np.float64), name='qalpha_rho')
-# 
-# surrogate_posterior = tfd.JointDistributionNamed(dict(
-#     # qmu
-#     mu=tfd.Independent(tfd.Normal(qmu_loc, tf.nn.softplus(qmu_rho)), reinterpreted_batch_ndims=1),
-#     # qsigma
-#     sigma=tfd.Independent(tfd.LogNormal(qsigma_loc, tf.nn.softplus(qsigma_rho)), reinterpreted_batch_ndims=1),
-#     # qv
-#     v=tfd.Independent(tfd.LogitNormal(qv_loc, tf.nn.softplus(qv_rho)), reinterpreted_batch_ndims=1),
-#     # qalpha
-#     alpha=tfd.LogNormal(qalpha_loc, tf.nn.softplus(qalpha_rho))))
-# 
-# free_params = [qmu_loc, qmu_rho,
-#                qsigma_loc, qsigma_rho,
-#                qv_loc, qv_rho,
-#                qalpha_loc, qalpha_rho]
-#   
-# y = np.array(simdata['y'], dtype=np.float64)
-# def model_log_prob(**q_samples):
-#     d = q_samples
-#     d['obs'] = y
-#     return model.log_prob(d)
-# 
-# # s = surrogate_posterior.sample(3)
-# # model_log_prob(s)
-# 
-# # FIXME?!
-# losses = tfp.vi.fit_surrogate_posterior(
-#     target_log_prob_fn=model_log_prob,
-#     surrogate_posterior=surrogate_posterior,
-#     optimizer=tf.optimizers.Adam(learning_rate=0.05),
-#     num_steps=200)
-
-
-# In[11]:
-
-
-# tfp.vi.fit_surrogate_posterior?
-
-
-# In[12]:
-
-
-print('Run HMC samplers ...')
-get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=False)  # 53 seconds.')
-hmc_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
-
-
-# In[13]:
-
-
-print('Run NUTS samplers ...')
-get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=True)  # 9min 15s')
-nuts_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
-
-
-# In[14]:
-
-
+# Helper for plotting posterior distribution of a given parameter.
 def plot_param_post(param, param_name, param_full_name, level=95, figsize=(12, 4), truth=None):
     plt.figure(figsize=figsize)
     
@@ -227,15 +186,16 @@ def plot_param_post(param, param_name, param_full_name, level=95, figsize=(12, 4
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[15]:
+# In[9]:
 
 
-def plot_all_params(output):
+# Helper for plotting posterior distribution of all model parameters.
+def plot_all_params(output, target_logprob_fn):
     mu = output['mu'].numpy()
     sigma = output['sigma'].numpy()
     v = output['v']
     alpha = output['alpha'].numpy()
-    eta = np.apply_along_axis(stickbreak, 1, v)
+    eta = stickbreak(v).numpy()
     
     plot_param_post(eta, 'eta', 'mixture weights', truth=simdata['w'])
     plot_param_post(mu, 'mu', 'mixture locations', truth=simdata['mu'])
@@ -249,26 +209,132 @@ def plot_all_params(output):
     plt.title("Posterior distribution of alpha"); 
     
     plt.subplot(1, 2, 2)
-    # Plot likelihood
-    lp = [joint_log_prob(y, mu[i], sigma[i], alpha[i], v[i]) for i in range(len(mu))]
+    # Plot log joint posterior (unnormalized)
+    lp = [target_logprob_fn(mu=mu[i], sigma=sigma[i], alpha=alpha[i], v=v[i]) for i in range(len(mu))]
     lp = np.vstack(lp).ravel()
     plt.plot(lp)
     plt.xlabel("iteration (post-burn)")
-    plt.ylabel("log likelihood");
+    plt.ylabel("log joint posterior density (unnormalized)");
 
+
+# # Model Creation
+
+# In[10]:
+
+
+# Number of mixture components.
+ncomponents = 10
+
+print('Create model ...')
+model = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)
+
+print('Define log unnormalized joint posterior density ...')
+def target_log_prob_fn(mu, sigma, alpha, v):
+    return model.log_prob(obs=y, mu=mu, sigma=sigma, alpha=alpha, v=v)
+
+
+# ***
+# # ADVI
+# 
+# Credits: Thanks to Dave Moore at bayesflow for helping with the implementation!
+
+# In[11]:
+
+
+# FIXME: This may need some tweaking.
+
+# This cell contains everything for initializing the variational distribution,
+# which approximates the true posterior.
+tf.random.set_seed(7) # 7
+
+# Create variational parameters.
+qmu_loc = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64) * 3, name='qmu_loc')
+qmu_rho = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64) * 2, name='qmu_rho')
+
+qsigma_loc = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64) - 2, name='qsigma_loc')
+qsigma_rho = tf.Variable(tf.random.normal([ncomponents], dtype=np.float64) - 2, name='qsigma_rho')
+
+qv_loc = tf.Variable(tf.random.normal([ncomponents - 1], dtype=np.float64) - 2, name='qv_loc')
+qv_rho = tf.Variable(tf.random.normal([ncomponents - 1], dtype=np.float64) - 1, name='qv_rho')
+
+qalpha_loc = tf.Variable(tf.random.normal([], dtype=np.float64), name='qalpha_loc')
+qalpha_rho = tf.Variable(tf.random.normal([], dtype=np.float64), name='qalpha_rho')
+
+# Create variational distribution.
+surrogate_posterior = tfd.JointDistributionNamed(dict(
+    # qmu
+    mu=tfd.Independent(tfd.Normal(qmu_loc, tf.nn.softplus(qmu_rho)), reinterpreted_batch_ndims=1),
+    # qsigma
+    sigma=tfd.Independent(tfd.LogNormal(qsigma_loc, tf.nn.softplus(qsigma_rho)), reinterpreted_batch_ndims=1),
+    # qv
+    v=tfd.Independent(tfd.LogitNormal(qv_loc, tf.nn.softplus(qv_rho)), reinterpreted_batch_ndims=1),
+    # qalpha
+    alpha=tfd.LogNormal(qalpha_loc, tf.nn.softplus(qalpha_rho))))
+
+
+# In[12]:
+
+
+get_ipython().run_cell_magic('time', '', '# Run optimizer\nlosses = tfp.vi.fit_surrogate_posterior(\n    # target_log_prob_fn=model_log_prob,\n    target_log_prob_fn=target_log_prob_fn,\n    surrogate_posterior=surrogate_posterior,\n    optimizer=tf.optimizers.Adam(learning_rate=1e-2),  # 0.1, 0.01\n    sample_size=25,\n    seed=1, num_steps=10000)  # 200, 2000')
+
+
+# In[13]:
+
+
+plt.plot(losses.numpy())
+plt.xlabel('Optimizer Iteration')
+plt.ylabel('ELBO');
+
+
+# In[14]:
+
+
+# Extract posterior samples from VI
+advi_output = surrogate_posterior.sample(500)
+plot_all_params(advi_output, target_log_prob_fn)
+
+
+# ***
+# # MCMC
+
+# In[15]:
+
+
+get_ipython().run_cell_magic('time', '', "\n# Create initial values..\n# For HMC, NUTS. Not necessary for ADVI, as ADVI has surrogate_posterior.\ndef generate_initial_state(seed=None):\n    tf.random.set_seed(seed)\n    return [\n        tf.zeros(ncomponents, dtype, name='mu'),\n        tf.ones(ncomponents, dtype, name='sigma') * 0.1,\n        tf.ones([], dtype, name='alpha') * 0.5,\n        tf.fill(ncomponents - 1, value=np.float64(0.5), name='v')\n    ]\n\n# Create bijectors to transform unconstrained to and from constrained parameters-space.\n# For example, if X ~ Exponential(theta), then X is constrained to be positive. A transformation\n# that puts X onto an unconstrained space is Y = log(X). In that case, the bijector used\n# should be the **inverse-transform**, which is exp(.) (i.e. so that X = exp(Y)).\n#\n# NOTE: Define the inverse-transforms for each parameter in sequence.\nbijectors = [\n    tfb.Identity(),  # mu\n    tfb.Exp(),  # sigma\n    tfb.Exp(),  # alpha\n    tfb.Sigmoid()  # v\n]\n\nprint('Define sampler ...')\n# You may get weird errors if you put certain things in here...\n# For example, I can't do generate_initial_state inside\n# the function. I supposed this has something to do with\n# the `tf.function` decorator.\n#\n# Improve performance by tracing the sampler using `tf.function`\n# and compiling it using XLA.\n@tf.function(autograph=False)\ndef sample(use_nuts, current_state, max_tree_depth=10):\n    if use_nuts:\n        ### NUTS ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.NoUTurnSampler(\n                     target_log_prob_fn=target_log_prob_fn,\n                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=500,  # should be smaller than burn-in.\n            target_accept_prob=0.8)\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n    else:\n        ### HMC ###\n        kernel = tfp.mcmc.SimpleStepSizeAdaptation(\n            tfp.mcmc.TransformedTransitionKernel(\n                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(\n                    target_log_prob_fn=target_log_prob_fn,\n                    step_size=0.01, num_leapfrog_steps=100, seed=1),\n                bijector=bijectors),\n            num_adaptation_steps=500)  # should be smaller than burn-in.\n        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted\n        \n    return tfp.mcmc.sample_chain(\n        num_results=500,\n        num_burnin_steps=500,\n        current_state=current_state,\n        # current_state=initial_states,\n        kernel=kernel,\n        trace_fn=trace_fn)")
+
+
+# ## HMC
 
 # In[16]:
 
 
-# HMC posterior inference
-plot_all_params(hmc_output)
+print('Run HMC samplers ...')
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=False, current_state=generate_initial_state(1))  # 53 seconds.')
+hmc_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
 
 
 # In[17]:
 
 
+# HMC posterior inference
+plot_all_params(hmc_output, target_log_prob_fn)
+
+
+# ## NUTS
+
+# In[18]:
+
+
+print('Run NUTS samplers ...')
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=True, current_state=generate_initial_state(1))  # 53 seconds.')
+nuts_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
+
+
+# In[19]:
+
+
 # NUTS posterior inference
-plot_all_params(nuts_output)
+plot_all_params(nuts_output, target_log_prob_fn)
 
 
 # In[ ]:

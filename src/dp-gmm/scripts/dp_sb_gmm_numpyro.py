@@ -8,13 +8,14 @@ import datetime
 print('Last updated: ', datetime.datetime.now(), '(PT)')
 
 
-# In[2]:
+# In[9]:
 
 
 import json
 import matplotlib.pyplot as plt
 from jax import random
 import jax.numpy as np
+from jax.scipy.special import logsumexp
 import numpyro
 import numpyro.distributions as dist
 from numpyro.distributions import constraints
@@ -23,31 +24,34 @@ from numpyro.distributions import constraints
 # from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate, infer_discrete
 # from pyro.contrib.autoguide import AutoDiagonalNormal
 from numpyro.infer import MCMC, NUTS, HMC
+import numpy as onp
 
 
-# In[3]:
+# In[40]:
 
+
+# TFP:
+# def stickbreak(v):
+#     batch_ndims = len(v.shape) - 1
+#     cumprod_one_minus_v = tf.math.cumprod(1 - v, axis=-1)
+#     one_v = tf.pad(v, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
+#     c_one = tf.pad(cumprod_one_minus_v, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
+#     return one_v * c_one
 
 # Stick break function
 def stickbreak(v):
+    batch_ndims = len(v.shape) - 1
     cumprod_one_minus_v = np.exp(np.log1p(-v).cumsum(-1))
     # cumprod_one_minus_v = np.cumprod(1-v, axis=-1)
-    one_v = np.pad(v, (0, 1), constant_values=1)
-    c_one = np.pad(cumprod_one_minus_v, (1, 0), constant_values=1)
+    one_v = np.pad(v, [[0, 0]] * batch_ndims + [[0, 1]], constant_values=1)
+    c_one = np.pad(cumprod_one_minus_v, [[0, 0]] * batch_ndims +[[1, 0]], constant_values=1)
     return one_v * c_one
 
-# Log sum exp
-def logsumexp(x, axis=0, keepdims=False):
-    # return np.log(np.sum(np.exp(x), axis=axis))
-    mx = np.max(x, axis=axis, keepdims=True)
-    out = np.log(np.sum(np.exp(x - mx), axis=axis, keepdims=True)) + mx
-    if keepdims:
-        return out
-    else:
-        return out.sum(axis=axis)
+# x = onp.random.randn(3, 2, 5)
+# stickbreak(x);  # last dimension sums to 1.
 
 
-# In[4]:
+# In[41]:
 
 
 # Custom distribution: Mixture of normals.
@@ -70,7 +74,7 @@ class NormalMixture(dist.Distribution):
         return logsumexp(lp, axis=axis)
 
 
-# In[5]:
+# In[42]:
 
 
 # Example:
@@ -84,7 +88,7 @@ class NormalMixture(dist.Distribution):
 # print(lp_x)
 
 
-# In[6]:
+# In[43]:
 
 
 # DP SB GMM model.
@@ -123,7 +127,7 @@ def dp_sb_gmm(y, num_components):
     #     numpyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
-# In[7]:
+# In[44]:
 
 
 # Read simulated data.
@@ -132,19 +136,18 @@ with open(path_to_data) as f:
   simdata = json.load(f)
 
 
-# In[8]:
+# In[45]:
 
 
 # Convert data to torch.tensor.
 y = np.array(simdata['y'])
 
 
-# In[9]:
+# In[87]:
 
-
-# Experimental, syntax not known.
 
 # %%time
+# # Experimental, syntax not known.
 # 
 # # For ADVI
 # from numpyro.infer import SVI, ELBO
@@ -152,6 +155,10 @@ y = np.array(simdata['y'])
 # from numpyro.optim import Adam
 # from functools import namedtuple
 # from tqdm import trange
+# from functools import namedtuple
+# 
+# # SVIState namedtuple
+# SVIState = namedtuple('SVIState', ['optim_state', 'rng_key'])
 # 
 # # Set random seed for reproducibility.
 # rng_key = random.PRNGKey(0)
@@ -159,46 +166,50 @@ y = np.array(simdata['y'])
 # # Automatically define variational distribution.
 # guide = AutoDiagonalNormal(dp_sb_gmm)  # a mean field guide
 # 
-# svi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), ELBO())
+# # Adam Optimizer
+# opt = Adam({'lr': 1e-2})
+# # opt = numpyro.optim.optimizers.adam(0.01)
+# 
+# svi = SVI(dp_sb_gmm, guide, opt, ELBO())
+# 
+# # svi_state = SVIState(opt, rng_key)
 # 
 # # do gradient steps
-# 
 # loss = []
 # for step in trange(2000):
-#     _loss = svi.update(SVIState, y=y, num_components=10)
+#     _loss = svi.update(svi_state, y=y, num_components=10)
 #     loss.append(_loss)
 #     
 # # Plot ELBO    
 # plt.plot(loss);
 
 
-# In[10]:
+# In[91]:
 
 
 def get_posterior_samples(mcmc):
-    # Get posterior samples
+    # Get mu, sigma, v, alpha.
     posterior_samples = mcmc.get_samples()
-
-    # `np.apply_along_axis` not implemented in numpyro?
-    # TODO: Is there a more efficient way to do this?
-    posterior_samples['eta'] = np.vstack([stickbreak(v) for v in posterior_samples['v']]) 
+    
+    # Transform v to eta.
+    posterior_samples['eta'] = stickbreak(posterior_samples['v'])
     
     return posterior_samples
 
 
-# In[11]:
+# In[92]:
 
 
 get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1) \n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
 
 
-# In[12]:
+# In[93]:
 
 
 get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\nnuts = MCMC(kernel, num_samples=500, num_warmup=500)\nnuts.run(rng_key, y, 10)\n\nnuts_samples = get_posterior_samples(nuts)')
 
 
-# In[13]:
+# In[94]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -221,7 +232,7 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[14]:
+# In[95]:
 
 
 def plot_all_params(samples):
@@ -238,13 +249,13 @@ def plot_all_params(samples):
     plt.title("Posterior distribution of alpha");
 
 
-# In[15]:
+# In[96]:
 
 
 plot_all_params(hmc_samples)
 
 
-# In[16]:
+# In[97]:
 
 
 plot_all_params(nuts_samples)

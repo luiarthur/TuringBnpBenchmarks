@@ -109,15 +109,15 @@ plt.ylabel("density")
 
 plt.tight_layout();
 
-function extract(chain, sym; burn=0, idx=nothing)
-    if idx == nothing
-        tail = chain[sym].value.data[(burn + 1):end, :, :]
+function extract(chain, sym; burn=0, is_scalar=true)
+    if is_scalar
+        tail = chain[sym].data[(burn + 1):end, 1]
     else
-        sym = String(sym)
-        syms = [Symbol("$(sym)[$i]") for i in idx]
-        tail = chain[syms].value.data[(burn + 1):end, :, :]
+        tail = group(chain, sym).value.data[(burn + 1):end, :, 1]
+        # NOTE: `chain[:sym]` will not work in the future for parameter
+        # vectors. Use `group` instead.
     end
-    return dropdims(tail, dims=3)
+    return tail
 end
 
 # Fit DP-SB-GMM with HMC
@@ -191,9 +191,9 @@ function plot_param_post(param, param_name, param_full_name; figsize=(11, 4), tr
 end
 
 function plot_all_params(param; burn, figsize=(11, 4))
-    vpost = extract(param, :v, burn=burn, idx=1:(n_components-1));
-    mupost = extract(param, :mu, burn=burn, idx=1:n_components);
-    sigpost = extract(param, :sig, burn=burn, idx=1:n_components);
+    vpost = extract(param, :v, burn=burn, is_scalar=false);
+    mupost = extract(param, :mu, burn=burn, is_scalar=false);
+    sigpost = extract(param, :sig, burn=burn, is_scalar=false);
     etapost = hcat([stickbreak(vpost[row, :]) for row in 1:size(vpost, 1)]...)';
     
     plt.figure(figsize=figsize)
@@ -209,7 +209,7 @@ function plot_all_params(param; burn, figsize=(11, 4))
     # plt.ylabel("Log likelihood")
 
     plt.subplot(1, 2, 2)
-    plt.hist(vec(param[:alpha].data), density=true, bins=30)
+    plt.hist(extract(param, :alpha, burn=burn), density=true, bins=30)
     plt.xlabel("α")
     plt.ylabel("density")
     plt.title("Histogram of mass parameter α"); 
