@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[2]:
 
 
 get_ipython().system('echo "Last updated:" `date`')
@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated:" `date`')
 # 
 # This notebook demonstrates how a GP is specified and sampled from in STAN.
 
-# In[2]:
+# In[3]:
 
 
 import pystan
@@ -25,7 +25,7 @@ import copy
 from scipy.spatial import distance_matrix
 
 
-# In[3]:
+# In[4]:
 
 
 # Define GP model.
@@ -48,6 +48,11 @@ data {
     real<lower=0> s_alpha;
 }
 
+transformed data {
+    // GP mean function.
+    vector[N] mu = rep_vector(0, N);
+}
+
 parameters {
     real<lower=0> rho;   // range parameter in GP covariance fn
     real<lower=0> alpha; // covariance scale parameter in GP covariance fn
@@ -61,7 +66,7 @@ model {
     alpha ~ lognormal(m_alpha, s_alpha);  // GP covariance function scale parameter
    
     // Using exponential quadratic covariance function
-    // K(d) = alpha^2 * exp(-d^2 / (2*rho))
+    // K(d) = alpha^2 * exp(-0.5 * (d/rho)^2)
     K = cov_exp_quad(to_array_1d(X), alpha, rho); 
     
     // Add small values along diagonal elements for numerical stability.
@@ -69,74 +74,64 @@ model {
         K[n, n] = K[n, n] + eps;
     }
         
+    // Cholesky of K (lower triangle).
     LK = cholesky_decompose(K);
 
     // GP likelihood.
-    y ~ multi_normal_cholesky(rep_vector(0.0, N), LK);
+    y ~ multi_normal_cholesky(mu, LK);
 }
 """
 
 
-# In[4]:
+# In[5]:
 
 
 get_ipython().run_cell_magic('time', '', '# Compile model. This takes about a minute.\nsm = pystan.StanModel(model_code=gp_model_code)')
 
 
-# In[100]:
+# In[6]:
 
 
-# Generate data.
-np.random.seed(1)
-
-# True function.
-def f(x):
-    return np.sin(3 * x) * np.sin(x) * (-1)**(x > 0)
-
-# Number of observations.
-N = 30
-
-# Predictors.
-x = np.random.rand(N) * 6 - 3
-
-# Response.
-y = f(x)
-
-# Finer grid for plotting true function.
-x_ = np.linspace(-3.5, 3.5, 100)
-f_ = f(x_)
+# Read data.
+path_to_data = '../data/gp-data-N30.json'
+simdata = json.load(open(path_to_data))
 
 # Plot data and true function.
-plt.scatter(x, y, label='data')
+plt.scatter(simdata['x'], simdata['f'], label='data')
+plt.plot(simdata['x_true'], simdata['f_true'], ls=':', c='grey', label='true f(x)')
 plt.xlabel('x')
-plt.ylabel('y = f(x)');
-plt.plot(x_, f_, ls=':', c='grey', label='true f(x)')
+plt.ylabel('y = f(x)')
 plt.legend();
 
 
-# In[78]:
+# In[7]:
 
 
 # Data dictionary.
-data = dict(y=y, X=x.reshape(N, 1), N=N, D=1, eps=1e-6, m_rho=-2, s_rho=0.1, m_alpha=0, s_alpha=1)
+N = len(simdata['x'])
+data = dict(y=simdata['f'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
+            eps=1e-3, m_rho=-2, s_rho=0.1, m_alpha=0, s_alpha=1)
 
 
-# In[79]:
+# In[8]:
 
 
-get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=1000, seed=2)\nvb_samples = pystan_vb_extract(vb_fit)')
+get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2)\nvb_samples = pystan_vb_extract(vb_fit)')
 
 
-# In[80]:
+# In[9]:
 
 
-# %%time
-# # Fit via HMC
-# hmc_fit = sm.sampling(data=data, iter=1000, chains=1, warmup=500, thin=1,
-#                       seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))
+get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
-# In[81]:
+# In[10]:
+
+
+get_ipython().run_cell_magic('time', '', '# Fit via NUTS\nnuts_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1, seed=1)')
+
+
+# In[11]:
 
 
 # Covariance function (squared exponential)
@@ -165,65 +160,84 @@ def gp_predict_maker(y, x, x_new):
     return gp_predict
 
 
-# In[85]:
-
-
-# Aliais.
-# samples = hmc_fit
-samples = vb_samples
-
-# Create new locations for prediction.
-# But include the data for illustrative purposes.
-x_min = np.min(x) - 1
-x_max = np.max(x) + 1
-x_new = np.linspace(x_min, x_max, 100)
-x_new = np.sort(np.concatenate((x_new, x)))
-
-# Create gp predict function.
-gp_predict = gp_predict_maker(y, x, x_new)
-
-# Number of posterior samples.
-nsamples = len(samples['alpha'])
-
-# Make predictions at new locations.
-preds = np.stack([gp_predict(alpha=samples['alpha'][b],
-                             rho=samples['rho'][b],
-                             eps=data['eps'])
-                  for b in range(nsamples)])
-
-
-# In[99]:
+# In[12]:
 
 
 # Function for plotting parameter posterior.
-def plot_post(samples, key, bins=None):
+def plot_post(samples, key, bins=None, suffix=""):
     plt.hist(samples[key], density=True, bins=bins)
     plt.xlabel(key)
     plt.ylabel('density')
-    plt.title(key);    
+    if suffix != "":
+        suffix = "({})".format(suffix)
     
-# Plot parameters posterior.
-plt.figure(figsize=(12, 4))
-plt.subplot(1, 2, 1)
-plot_post(samples, 'alpha', bins=30)
-plt.subplot(1, 2, 2)
-plot_post(samples, 'rho', bins=30)
+    plt.title("{} {}".format(key, suffix));
+    
+# Function for making all plots.
+def make_plots(samples, n_new=100, figsize=(12,4), figsize_f=(12, 4), suffix=""):
+    # Create new locations for prediction.
+    # But include the data for illustrative purposes.
+    x = np.array(simdata['x'])
+    y = np.array(simdata['f'])
+    x_min = -3.5
+    x_max = 3.5
+    x_new = np.linspace(x_min, x_max, n_new)
+    x_new = np.sort(np.concatenate((x_new, x)))
+
+    # Create gp predict function.
+    gp_predict = gp_predict_maker(y, x, x_new)
+
+    # Number of posterior samples.
+    nsamples = len(samples['alpha'])
+
+    # Make predictions at new locations.
+    preds = np.stack([gp_predict(alpha=samples['alpha'][b],
+                                 rho=samples['rho'][b],
+                                 eps=data['eps'])
+                      for b in range(nsamples)])
+      
+    # Plot parameters posterior.
+    plt.figure(figsize=figsize)
+    plt.subplot(1, 2, 1)
+    plot_post(samples, 'alpha', bins=30, suffix=suffix)
+    plt.subplot(1, 2, 2)
+    plot_post(samples, 'rho', bins=30, suffix=suffix)
+    
+    # Summarize function posterior.
+    preds_mean = preds.mean(0)
+    preds_lower = np.percentile(preds, 2.5, axis=0)
+    preds_upper = np.percentile(preds, 97.5, axis=0)
+    
+    # Make suffix
+    if suffix != "":
+        suffix = "({})".format(suffix)
+
+    # Plot function posterior.
+    plt.figure(figsize=figsize_f)
+    plt.scatter(x, y, c='black', zorder=3, label='data')
+    plt.fill_between(x_new, preds_upper, preds_lower, alpha=.3, label='95% CI');
+    plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.")
+    plt.plot(simdata['x_true'], simdata['f_true'], label="truth", lw=2, c='red', ls=':')
+    plt.title("GP Posterior Predictive with 95% CI {}".format(suffix))
+    plt.legend(); 
 
 
-# In[90]:
+# In[13]:
 
 
-# Summarize function posterior.
-preds_mean = preds.mean(0)
-preds_lower = np.percentile(preds, 2.5, axis=0)
-preds_upper = np.percentile(preds, 97.5, axis=0)
+make_plots(vb_samples, suffix="ADVI")
 
-# Plot function posterior.
-plt.scatter(x, y, c='black', zorder=3, label='data')
-plt.fill_between(x_new, preds_upper, preds_lower, alpha=.3, label='95% CI');
-plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.")
-plt.plot(x_new, f(x_new), label="truth", lw=2, c='red', ls=':')
-plt.legend();
+
+# In[14]:
+
+
+make_plots(hmc_fit, suffix="HMC")
+
+
+# In[15]:
+
+
+make_plots(nuts_fit, suffix="NUTS")
 
 
 # In[ ]:
