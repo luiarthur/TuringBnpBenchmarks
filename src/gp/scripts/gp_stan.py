@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 get_ipython().system('echo "Last updated:" `date`')
@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated:" `date`')
 # 
 # This notebook demonstrates how a GP is specified and sampled from in STAN.
 
-# In[3]:
+# In[2]:
 
 
 import pystan
@@ -21,11 +21,11 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('../util')
 from pystan_vb_extract import pystan_vb_extract
+import gp_plot_util
 import copy
-from scipy.spatial import distance_matrix
 
 
-# In[4]:
+# In[3]:
 
 
 # Define GP model.
@@ -83,13 +83,13 @@ model {
 """
 
 
-# In[5]:
+# In[4]:
 
 
 get_ipython().run_cell_magic('time', '', '# Compile model. This takes about a minute.\nsm = pystan.StanModel(model_code=gp_model_code)')
 
 
-# In[6]:
+# In[5]:
 
 
 # Read data.
@@ -104,7 +104,7 @@ plt.ylabel('y = f(x)')
 plt.legend();
 
 
-# In[7]:
+# In[6]:
 
 
 # Data dictionary.
@@ -113,131 +113,46 @@ data = dict(y=simdata['f'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
             eps=1e-3, m_rho=-2, s_rho=0.1, m_alpha=0, s_alpha=1)
 
 
-# In[8]:
+# In[7]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2)\nvb_samples = pystan_vb_extract(vb_fit)')
 
 
-# In[9]:
+# In[8]:
 
 
 get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
-# In[10]:
+# In[9]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via NUTS\nnuts_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1, seed=1)')
 
 
-# In[11]:
+# In[10]:
 
 
-# Covariance function (squared exponential)
-def cov_fn(d, rho, alpha):
-    return alpha ** 2 * np.exp(-0.5 * (d / rho) ** 2)
-    
-# Function to create gp prediction function.
-def gp_predict_maker(y, x, x_new):
-    N = x.shape[0]
-    N_new = x_new.shape[0]
-    M = N + N_new
-    xx = np.concatenate((x_new, x)).reshape(M, 1)
-    D = distance_matrix(xx, xx)
-    
-    # Function which takes parameters of covariance function
-    # and predicts at new locations.
-    def gp_predict(rho, alpha, eps):
-        K = cov_fn(D, rho, alpha) + np.eye(M) * eps
-        K_new_old = K[:N_new, N_new:]
-        K_old_inv = np.linalg.inv(K[N_new:, N_new:])
-        C = K_new_old.dot(K_old_inv)
-        mu = C.dot(y)
-        S = K[:N_new, :N_new] - C.dot(K_new_old.T)
-        return np.random.multivariate_normal(mu, S)
-    
-    return gp_predict
-
-
-# In[12]:
-
-
-# Function for plotting parameter posterior.
-def plot_post(samples, key, bins=None, suffix=""):
-    plt.hist(samples[key], density=True, bins=bins)
-    plt.xlabel(key)
-    plt.ylabel('density')
-    if suffix != "":
-        suffix = "({})".format(suffix)
-    
-    plt.title("{} {}".format(key, suffix));
-    
-# Function for making all plots.
-def make_plots(samples, n_new=100, figsize=(12,4), figsize_f=(12, 4), suffix=""):
-    # Create new locations for prediction.
-    # But include the data for illustrative purposes.
-    x = np.array(simdata['x'])
-    y = np.array(simdata['f'])
-    x_min = -3.5
-    x_max = 3.5
-    x_new = np.linspace(x_min, x_max, n_new)
-    x_new = np.sort(np.concatenate((x_new, x)))
-
-    # Create gp predict function.
-    gp_predict = gp_predict_maker(y, x, x_new)
-
-    # Number of posterior samples.
-    nsamples = len(samples['alpha'])
-
-    # Make predictions at new locations.
-    preds = np.stack([gp_predict(alpha=samples['alpha'][b],
-                                 rho=samples['rho'][b],
-                                 eps=data['eps'])
-                      for b in range(nsamples)])
-      
-    # Plot parameters posterior.
-    plt.figure(figsize=figsize)
-    plt.subplot(1, 2, 1)
-    plot_post(samples, 'alpha', bins=30, suffix=suffix)
-    plt.subplot(1, 2, 2)
-    plot_post(samples, 'rho', bins=30, suffix=suffix)
-    
-    # Summarize function posterior.
-    preds_mean = preds.mean(0)
-    preds_lower = np.percentile(preds, 2.5, axis=0)
-    preds_upper = np.percentile(preds, 97.5, axis=0)
-    
-    # Make suffix
-    if suffix != "":
-        suffix = "({})".format(suffix)
-
-    # Plot function posterior.
-    plt.figure(figsize=figsize_f)
-    plt.scatter(x, y, c='black', zorder=3, label='data')
-    plt.fill_between(x_new, preds_upper, preds_lower, alpha=.3, label='95% CI');
-    plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.")
-    plt.plot(simdata['x_true'], simdata['f_true'], label="truth", lw=2, c='red', ls=':')
-    plt.title("GP Posterior Predictive with 95% CI {}".format(suffix))
-    plt.legend(); 
+gp_plot_util.make_plots(vb_samples, suffix="ADVI",
+                        x=np.array(simdata['x']), y=np.array(simdata['f']),
+                        x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
 # In[13]:
 
 
-make_plots(vb_samples, suffix="ADVI")
+gp_plot_util.make_plots(hmc_fit, suffix="HMC",
+                        x=np.array(simdata['x']), y=np.array(simdata['f']),
+                        x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
-# In[14]:
+# In[18]:
 
 
-make_plots(hmc_fit, suffix="HMC")
-
-
-# In[15]:
-
-
-make_plots(nuts_fit, suffix="NUTS")
+gp_plot_util.make_plots(nuts_fit, suffix="NUTS",
+                        x=np.array(simdata['x']), y=np.array(simdata['f']),
+                        x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
 # In[ ]:
