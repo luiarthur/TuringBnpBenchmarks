@@ -55,7 +55,7 @@ plt.ylabel('y = f(x)')
 plt.legend();
 
 # Store data as torch.tensors.
-X = torch.tensor(simdata['x']).reshape(len(simdata['x']), 1)
+X = torch.tensor(simdata['x']).reshape(-1, 1)
 y = torch.tensor(simdata['f'])
 
 
