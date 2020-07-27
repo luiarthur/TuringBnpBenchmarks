@@ -29,7 +29,7 @@ import gp_plot_util
 
 # One-dimensional squared exponential kernel with diagonal noise term.
 def squared_exp_cov_1D(X, variance, lengthscale, noise=1.0e-3):
-    deltaXsq = np.power(np.abs(X[:, None] - X) / lengthscale, 2.0)
+    deltaXsq = np.power((X[:, None] - X) / lengthscale, 2.0)
     K = variance * np.exp(-0.5 * deltaXsq)
     K += noise * np.eye(X.shape[0])
     return K
