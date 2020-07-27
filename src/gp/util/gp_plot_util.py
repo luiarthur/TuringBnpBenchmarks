@@ -80,7 +80,7 @@ def make_plots(samples, x, y, x_true, f_true, cov_fn=sqexp_cov_fn,
     plt.figure(figsize=figsize_f)
     plt.scatter(x, y, c='black', zorder=3, label='data')
     plt.fill_between(x_new, preds_upper, preds_lower, alpha=.3, label='95% CI')
-    plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.")
+    plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.", color="blue")
     plt.plot(x_true, f_true, label="truth", lw=2, c='red', ls=':')
     plt.title("GP Posterior Predictive with 95% CI {}".format(suffix))
     plt.legend(); 
