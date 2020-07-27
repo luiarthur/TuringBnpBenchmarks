@@ -26,3 +26,20 @@ body {
 .highlight * td pre{
   border: 0px;
 }
+div.ppl-code p {
+  font-size: 100%;
+  padding: 10px;
+}
+/* Sortable tables */
+table.sortable thead {
+    background-color:#eee;
+    color:#666666;
+    font-weight: bold;
+    cursor: default;
+}
+img.center {
+  max-width: 80%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
