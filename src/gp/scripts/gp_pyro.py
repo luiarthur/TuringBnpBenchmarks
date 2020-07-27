@@ -40,7 +40,7 @@ import gp_plot_util
 # https://pyro.ai/examples/gp.html
 
 
-# In[50]:
+# In[3]:
 
 
 # Read data.
@@ -59,7 +59,7 @@ X = torch.tensor(simdata['x']).reshape(-1, 1)
 y = torch.tensor(simdata['f'])
 
 
-# In[63]:
+# In[4]:
 
 
 def make_gp_model(X, y, noise=torch.tensor(1e-3).sqrt(),
@@ -79,19 +79,19 @@ def make_gp_model(X, y, noise=torch.tensor(1e-3).sqrt(),
     return gpr
 
 
-# In[53]:
+# In[5]:
 
 
 get_ipython().run_cell_magic('time', '', "\n### HMC ###\npyro.clear_param_store()\n\n# Set random seed for reproducibility.\npyro.set_rng_seed(1)\n\n# Make GP model for HMC\nhmc_gpr = make_gp_model(X, y)\n\n# Set up HMC sampler.\nkernel = HMC(hmc_gpr.model, step_size=0.01, trajectory_length=1, target_accept_prob=0.8,\n             adapt_step_size=False, adapt_mass_matrix=False)\nhmc = MCMC(kernel, num_samples=1000, warmup_steps=1000)\nhmc.run()\n\n# Get posterior samples\nhmc_posterior_samples = hmc.get_samples()\nhmc_posterior_samples = dict(rho=hmc_posterior_samples['kernel.lengthscale'].numpy(),\n                             alpha=hmc_posterior_samples['kernel.variance'].sqrt().numpy())")
 
 
-# In[70]:
+# In[6]:
 
 
 get_ipython().run_cell_magic('time', '', "\n### NUTS ###\npyro.clear_param_store()\n\n# Set random seed for reproducibility.\npyro.set_rng_seed(1)\n\n# Make GP model for NUTS\nnuts_gpr = make_gp_model(X, y)\n\n# Set up NUTS sampler.\nkernel = NUTS(nuts_gpr.model, target_accept_prob=0.8)\nnuts = MCMC(kernel, num_samples=1000, warmup_steps=1000)\n%time nuts.run()\n\n# Get posterior samples\nnuts_posterior_samples = nuts.get_samples()\nnuts_posterior_samples = dict(rho=nuts_posterior_samples['kernel.lengthscale'].numpy(),\n                              alpha=nuts_posterior_samples['kernel.variance'].sqrt().numpy())")
 
 
-# In[71]:
+# In[7]:
 
 
 # Plot posterior for NUTS
@@ -100,7 +100,7 @@ gp_plot_util.make_plots(nuts_posterior_samples, suffix="NUTS",
                         x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
-# In[75]:
+# In[8]:
 
 
 # Plot posterior for HMC
@@ -109,13 +109,13 @@ gp_plot_util.make_plots(hmc_posterior_samples, suffix="HMC",
                         x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
-# In[208]:
+# In[9]:
 
 
 get_ipython().run_cell_magic('time', '', '\n### MAP ###\n# Can\'t get posterior samples for ADVI?\n\n# Clear parameter cache.\npyro.clear_param_store()\n\n# Set random seed for reproducibility.\npyro.set_rng_seed(2)\n\n# Make GP model for MAP\nmap_gpr = make_gp_model(X, y)\n\n# Find MAP estimator\noptimizer = torch.optim.Adam(map_gpr.parameters(), lr=5e-2)\nloss_fn = pyro.infer.Trace_ELBO().differentiable_loss\nlosses = []\nnum_steps = 2000\nfor i in trange(num_steps):\n    optimizer.zero_grad()\n    loss = loss_fn(map_gpr.model, map_gpr.guide)\n    loss.backward()\n    optimizer.step()\n    losses.append(loss.item())\n    \n# Plot loss\nplt.plot(losses)\nplt.xlabel("Iteration")\nplt.ylabel("loss");\n\n# This \nmap_gpr.set_mode(\'guide\')\nmap_samples = dict(alpha=[map_gpr.kernel.variance.sqrt().item() for _ in range(10)],\n                   rho=[map_gpr.kernel.lengthscale.item() for _ in range(10)])')
 
 
-# In[209]:
+# In[10]:
 
 
 # Plot posterior for MAP

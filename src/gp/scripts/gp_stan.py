@@ -139,7 +139,7 @@ gp_plot_util.make_plots(vb_samples, suffix="ADVI",
                         x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
-# In[13]:
+# In[11]:
 
 
 gp_plot_util.make_plots(hmc_fit, suffix="HMC",
@@ -147,7 +147,7 @@ gp_plot_util.make_plots(hmc_fit, suffix="HMC",
                         x_true=simdata['x_true'], f_true=simdata['f_true'])
 
 
-# In[18]:
+# In[12]:
 
 
 gp_plot_util.make_plots(nuts_fit, suffix="NUTS",
