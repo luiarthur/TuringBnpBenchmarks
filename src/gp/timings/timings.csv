@@ -1,5 +1,5 @@
 advi_compile,advi_run,hmc_compile,hmc_run,model,nuts_compile,nuts_run,ppl
 51.0,0.0,51.0,1.0,gp,51.0,1.0,stan
-7.0,0.0,12.0,14.0,gp,14.0,1.0,turing
-NA,NA,0.0,456.0,gp,0.0,22.0,pyro
+6.0,0.0,12.0,14.0,gp,13.0,0.0,turing
+NA,NA,0.0,508.0,gp,0.0,26.0,pyro
 NA,NA,4.0,5.0,gp,2.0,7.0,numpyro

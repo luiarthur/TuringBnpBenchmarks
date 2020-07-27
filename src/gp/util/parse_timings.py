@@ -40,7 +40,7 @@ def sanitize_py(t):
         return tosec(t)
 
 def get_stan_gp_times(path):
-    content = read_file(path)
+    nb_content = read_file(path)
     ts = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
     ts = [sanitize_py(t) for t in ts]
     return dict(model='gp', ppl='stan',
