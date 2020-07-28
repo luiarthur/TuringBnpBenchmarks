@@ -22,14 +22,11 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
         ),
         # Mixture scales
         sigma = tfd.Independent(
-            # tfd.Gamma(concentration=np.ones(K, dtype), rate=10),
             tfd.LogNormal(loc=np.full(K, - 2, dtype), scale=0.5),
             reinterpreted_batch_ndims=1
         ),
         # Mixture weights (stick-breaking construction)
         alpha = tfd.Gamma(concentration=np.float64(1.0), rate=10.0),
-        # alpha = tfd.LogNormal(loc=np.float64(0.0), scale=1.0),
-        # alpha = tfd.LogNormal(loc=np.float64(-1), scale=0.1),
         v = lambda alpha: tfd.Independent(
             # tfd.Beta(np.ones(K - 1, dtype), alpha),
             # NOTE: Dave Moore suggests doing this instead, to ensure 
@@ -38,8 +35,6 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
             tfd.Beta(np.ones(K - 1, dtype), alpha[..., tf.newaxis]),
             reinterpreted_batch_ndims=1
         ),
-        # Alternatively,
-        # v = tfd.Dirichlet(np.ones(K, dtype) / K),
 
         # Observations (likelihood)
         obs = lambda mu, sigma, v: tfd.Sample(tfd.MixtureSameFamily(
