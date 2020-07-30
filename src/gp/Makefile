@@ -38,3 +38,6 @@ html:
 
 parse_times:
 	cd util && python3 parse_timings.py
+
+bundle_to_docs:
+	cp timings/timings.csv ../../docs/_data/timings/gp/gp_ppl_timings.csv
