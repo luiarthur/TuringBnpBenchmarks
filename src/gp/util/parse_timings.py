@@ -8,7 +8,7 @@ def read_file(path):
     return content
 
 def tosec(t):
-    return round(float(re.findall(r'.*(?=s)', t)[0]))
+    return round(float(re.findall(r'.*(?=s)', t)[0]), 3)
 
 def minsec2sec(t):
     m = re.findall(r'\d+(?=min)', t)[0]
@@ -54,17 +54,18 @@ def get_stan_gp_times(path):
 def get_turing_gp_times(path):
     nb_content = read_file(path)
     t = re.findall(r'\d+\.?\d+\s(?=seconds)', nb_content)
-    r = re.findall(r'(?<=Time:\s)\d+:\d+:\d+', nb_content)
+    # r = re.findall(r'(?<=Time:\s)\d+:\d+:\d+', nb_content)
     t = list(map(float, t))
-    r = list(map(sanitize_hms, r))
+    print(t)
+    # r = list(map(sanitize_hms, r))
     return dict(model='gp',
                 ppl='turing',
-                advi_compile=float(t[0] - r[0]),
-                hmc_compile=float(t[1] - r[1]),
-                nuts_compile=float(t[2] - r[2]),
-                advi_run=r[0],
-                hmc_run=r[1],
-                nuts_run=r[2])
+                advi_compile=t[0],
+                hmc_compile=t[2],
+                nuts_compile=t[4],
+                advi_run=t[1],
+                hmc_run=t[3],
+                nuts_run=t[5])
 
 def get_pyro_gp_times(path):
     nb_content = read_file(path)
@@ -141,7 +142,18 @@ if __name__ == '__main__':
     # TODO: NIMBLE GP Timings.
 
     # Save CSV
-    times_df.round().to_csv('../timings/timings.csv', index=False, na_rep='NA')
+    times_df = times_df[['ppl',
+                         'advi_run', 'hmc_run', 'nuts_run',
+                         'advi_compile', 'hmc_compile', 'nuts_compile']]
+    times_df = times_df.rename(columns={"ppl": "PPL",
+                                        "advi_run": "ADVI (run)",
+                                        "hmc_run": "HMC (run)",
+                                        "nuts_run": "NUTS (run)",
+                                        "advi_compile": "ADVI (compile)",
+                                        "hmc_compile": "HMC (compile)",
+                                        "nuts_compile": "NUTS (compile)"})
+    times_df = times_df.round(3)
+    times_df.to_csv('../timings/timings.csv', index=False, na_rep='NA')
 
     print(times_df)
     print('Written to ../timings/timings.csv')
