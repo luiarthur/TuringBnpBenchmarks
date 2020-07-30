@@ -22,7 +22,6 @@ import sys
 sys.path.append('../util')
 from pystan_vb_extract import pystan_vb_extract
 import gp_plot_util
-import copy
 
 
 # In[3]:
@@ -116,7 +115,7 @@ data = dict(y=simdata['f'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
 # In[7]:
 
 
-get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2)\nvb_samples = pystan_vb_extract(vb_fit)')
+get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2, grad_samples=1, elbo_samples=1)\nvb_samples = pystan_vb_extract(vb_fit)')
 
 
 # In[8]:

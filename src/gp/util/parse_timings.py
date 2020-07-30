@@ -95,6 +95,19 @@ def get_numpyro_gp_times(path):
                 hmc_run=r[0],
                 nuts_run=r[1])
 
+def get_tfp_gp_times(path):
+    nb_content = read_file(path)
+    t = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
+    t = list(map(sanitize_py, t))
+    return dict(model='gp',
+                ppl='tfp',
+                advi_compile=0,
+                hmc_compile=t[0],
+                nuts_compile=t[2],
+                advi_run=t[4],
+                hmc_run=t[1],
+                nuts_run=t[3])
+
 
 if __name__ == '__main__':
     path_to_nb="../notebooks"
@@ -121,7 +134,11 @@ if __name__ == '__main__':
     times_df = times_df.append(times, ignore_index=True)
 
     # TFP GP Timings.
-    # NIMBLE GP Timings.
+    tfp_nb_path = '{}/gp_tfp.ipynb'.format(path_to_nb)
+    times = get_tfp_gp_times(tfp_nb_path)
+    times_df = times_df.append(times, ignore_index=True)
+
+    # TODO: NIMBLE GP Timings.
 
     # Save CSV
     times_df.round().to_csv('../timings/timings.csv', index=False, na_rep='NA')
