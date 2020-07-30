@@ -8,13 +8,20 @@ simdata = json.load(open(path_to_data))
 
 # Plot data and true function.
 nobs = len(simdata['f'])
-plt.scatter(simdata['x'], simdata['f'] + np.random.randn(nobs) * 0.0, label='data')
-plt.plot(simdata['x_true'], simdata['f_true'], ls=':', c='grey', label='true f(x)')
-plt.xlabel('x')
-plt.ylabel('y = f(x)')
-plt.legend()
-plt.savefig('gp-data.png')
-plt.close()
+
+for add_noise in (False, True):
+    if add_noise:
+        noise = np.random.randn(nobs) * 0.1
+    else:
+        noise = np.zeros([])
+
+    plt.scatter(simdata['x'], simdata['f'] + noise, label='data')
+    plt.plot(simdata['x_true'], simdata['f_true'], ls=':', c='grey', label='true f(x)')
+    plt.xlabel('x')
+    plt.ylabel('y = f(x)')
+    plt.legend()
+    plt.savefig('gp-data{}.png'.format('-noisy' if add_noise else ''), bbox_inches='tight')
+    plt.close()
 
 # Linear Data
 np.random.seed(1)

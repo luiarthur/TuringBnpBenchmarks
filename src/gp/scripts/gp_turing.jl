@@ -76,8 +76,14 @@ Random.seed!(0)
 
 m = GP(y, X, sqexp_cov_fn, 0.0, 1.0, -2.0, 0.1)
 q0 = Variational.meanfield(m)  # initialize variational distribution (optional)
-advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
-@time q = vi(m, advi, q0, optimizer=Flux.ADAM(1e-1));
+
+# NOTE: ADVI(num_elbo_samples, max_iters)
+
+# Compile
+@time q = vi(m, ADVI(1, 1), q0, optimizer=Flux.ADAM(1e-1));
+
+# RUN
+@time q = vi(m, ADVI(1, 2000), q0, optimizer=Flux.ADAM(1e-1));
 
 # Get posterior samples
 extract_gp = make_extractor(m, q)
@@ -89,6 +95,11 @@ advi_samples = Dict(:alpha => alpha, :rho => rho)
 Random.seed!(0)
 burn = 1000
 nsamples = 1000
+
+# Compile
+@time _ = sample(m, HMC(0.01, 1), 1)
+
+# Run
 @time chain = sample(m, HMC(0.01, 100), burn + nsamples)
 
 # Get posterior samples
@@ -99,6 +110,10 @@ hmc_samples = Dict(:alpha => alpha, :rho => rho)
 # Fit via NUTS.
 Random.seed!(6)
 
+# Compile
+@time _ = sample(m, NUTS(4, 0.8), 9);
+
+# Run
 @time chain = begin
     nsamples = 1000  # number of MCMC samples
     nadapt = 1000  # number of iterations to adapt tuning parameters in NUTS
