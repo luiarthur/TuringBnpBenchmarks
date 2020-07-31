@@ -12,7 +12,11 @@ def tosec(t):
 
 def minsec2sec(t):
     m = re.findall(r'\d+(?=min)', t)[0]
-    s = re.findall(r'\d+(?=s)', t)[0]
+    _s = re.findall(r'\d+(?=s)', t)
+    if len(_s) > 0:
+        s = _s[0]
+    else:
+        s = 0
     return int(m) * 60 + int(s)
 
 def ms2sec(t):
@@ -56,7 +60,6 @@ def get_turing_gp_times(path):
     t = re.findall(r'\d+\.?\d+\s(?=seconds)', nb_content)
     # r = re.findall(r'(?<=Time:\s)\d+:\d+:\d+', nb_content)
     t = list(map(float, t))
-    print(t)
     # r = list(map(sanitize_hms, r))
     return dict(model='gp',
                 ppl='turing',
@@ -99,6 +102,7 @@ def get_numpyro_gp_times(path):
 def get_tfp_gp_times(path):
     nb_content = read_file(path)
     t = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
+    print(t)
     t = list(map(sanitize_py, t))
     return dict(model='gp',
                 ppl='tfp',
