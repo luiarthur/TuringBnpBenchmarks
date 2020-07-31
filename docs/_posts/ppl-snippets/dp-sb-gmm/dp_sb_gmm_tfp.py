@@ -136,53 +136,48 @@ bijectors = [
     tfb.Sigmoid()  # v
 ]
 
-# Define sampler (compile time negligible).
-# You may get weird errors if you put certain things in here...
-# For example, I can't generate_initial_state inside
-# the function. I supposed this has something to do with
-# the `tf.function` decorator.
-#
-# Improve performance by tracing the sampler using `tf.function`
-# and compiling it using XLA.
-@tf.function(autograph=False)
-def sample(use_nuts, current_state, max_tree_depth=10):
-    if use_nuts:
-        ### NUTS ###
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
-            tfp.mcmc.TransformedTransitionKernel(
-                inner_kernel=tfp.mcmc.NoUTurnSampler(
-                     target_log_prob_fn=target_log_prob_fn,
-                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),
-                bijector=bijectors),
-            num_adaptation_steps=500,  # should be smaller than burn-in.
-            target_accept_prob=0.8)
-        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
-    else:
-        ### HMC ###
+# Define HMC sampler.
+@tf.function(autograph=False, experimental_compile=True)
+def hmc_sample(num_results, num_burnin_steps, current_state, step_size=0.01, num_leapfrog_steps=100):
+    return tfp.mcmc.sample_chain(
+        num_results=num_results,
+        num_burnin_steps=num_burnin_steps,
+        current_state=current_state,
         kernel = tfp.mcmc.SimpleStepSizeAdaptation(
             tfp.mcmc.TransformedTransitionKernel(
                 inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
                     target_log_prob_fn=target_log_prob_fn,
-                    step_size=0.01, num_leapfrog_steps=100, seed=1),
+                    step_size=step_size, num_leapfrog_steps=num_leapfrog_steps, seed=1),
                 bijector=bijectors),
-            num_adaptation_steps=500)  # should be smaller than burn-in.
-        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
-        
-    return tfp.mcmc.sample_chain(
-        num_results=500,
-        num_burnin_steps=500,
-        current_state=current_state,
-        # current_state=initial_states,
-        kernel=kernel,
-        trace_fn=trace_fn)
+            num_adaptation_steps=num_burnin_steps),
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
+
+# Define NUTS sampler.
+@tf.function(autograph=False, experimental_compile=True)
+def nuts_sample(num_results, num_burnin_steps, current_state, max_tree_depth=10):
+    return tfp.mcmc.sample_chain(
+        num_results=num_results,
+        num_burnin_steps=num_burnin_steps,
+        current_state=current_state,
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
+            tfp.mcmc.TransformedTransitionKernel(
+                inner_kernel=tfp.mcmc.NoUTurnSampler(
+                     target_log_prob_fn=target_log_prob_fn,
+                     max_tree_depth=max_tree_depth, step_size=0.01, seed=1),
+                bijector=bijectors),
+            num_adaptation_steps=num_burnin_steps,  # should be smaller than burn-in.
+            target_accept_prob=0.8),
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
 # Run HMC sampler.
-[mu, sigma, alpha, v], is_accepted = sample(use_nuts=False)  # 33 seconds.
+current_state = generate_initial_state()
+[mu, sigma, alpha, v], is_accepted = hmc_sample(500, 500, current_state)
 hmc_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v,
                   acceptance_rate=is_accepted.numpy().mean())
 
 # Run NUTS sampler.
-[mu, sigma, alpha, v], is_accepted = sample(use_nuts=True)  # 5min 54s
+current_state = generate_initial_state()
+[mu, sigma, alpha, v], is_accepted = nuts_sample(500, 500, current_state)
 nuts_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v,
                    acceptance_rate=is_accepted.numpy().mean())

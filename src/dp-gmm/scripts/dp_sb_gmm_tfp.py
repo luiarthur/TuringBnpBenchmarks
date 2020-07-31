@@ -4,10 +4,19 @@
 # In[1]:
 
 
-# TODO: Clean up this implementation!
-import datetime
-print('Last updated:', datetime.datetime.now(), '(PT)')
+get_ipython().system('echo "Late updated:" `date`')
 
+
+# Resources for learning TFP
+# - https://www.tensorflow.org/probability/api_docs/python/tfp/mcmc/NoUTurnSampler
+# - https://www.tensorflow.org/probability/overview
+# - https://www.tensorflow.org/probability/api_docs/python/tfp/mcmc
+# - https://www.tensorflow.org/probability/examples/Modeling_with_JointDistribution
+# - https://www.tensorflow.org/probability/examples/Bayesian_Gaussian_Mixture_Model
+# 
+# To better understand event_shape, batch_shape, sample_shape:
+# - https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Distribution
+# - https://www.youtube.com/watch?v=zWXTpZX4PPo
 
 # In[2]:
 
@@ -23,17 +32,6 @@ from tensorflow_probability import bijectors as tfb
 # Default data type for tensorflow tensors.
 dtype = tf.float64
 
-# Resources for learning TFP
-# https://www.tensorflow.org/probability/api_docs/python/tfp/mcmc/NoUTurnSampler
-# https://www.tensorflow.org/probability/overview
-# https://www.tensorflow.org/probability/api_docs/python/tfp/mcmc
-# https://www.tensorflow.org/probability/examples/Modeling_with_JointDistribution
-# https://www.tensorflow.org/probability/examples/Bayesian_Gaussian_Mixture_Model
-
-# To better understand event_shape, batch_shape, sample_shape:
-# https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/Distribution
-# https://www.youtube.com/watch?v=zWXTpZX4PPo
-
 
 # In[3]:
 
@@ -45,17 +43,6 @@ tf.random.set_seed(1)
 
 # In[4]:
 
-
-# NOTE: This version does not work with batch dimensions.
-#
-# def stickbreak(v):
-#     cumprod_one_minus_v = tf.math.cumprod(1 - v)
-#     one_v = tf.pad(v, [[0, 1]], "CONSTANT", constant_values=1)
-#     c_one = tf.pad(cumprod_one_minus_v, [[1, 0]], "CONSTANT", constant_values=1)
-#     return one_v * c_one 
-#
-# Example:
-# stickbreak(np.random.rand(3))
 
 # Thanks to Dave Moore for extending this to work with batch dimensions!
 # This turns out to be necessary for ADVI to work properly.
@@ -91,30 +78,22 @@ def create_dp_sb_gmm(nobs, K, dtype=np.float64):
         ),
         # Mixture scales
         sigma = tfd.Independent(
-            # tfd.Gamma(concentration=np.ones(K, dtype), rate=10),
             tfd.LogNormal(loc=np.full(K, - 2, dtype), scale=0.5),
             reinterpreted_batch_ndims=1
         ),
         # Mixture weights (stick-breaking construction)
         alpha = tfd.Gamma(concentration=np.float64(1.0), rate=10.0),
-        # alpha = tfd.LogNormal(loc=np.float64(0.0), scale=1.0),
-        # alpha = tfd.LogNormal(loc=np.float64(-1), scale=0.1),
         v = lambda alpha: tfd.Independent(
-            # tfd.Beta(np.ones(K - 1, dtype), alpha),
             # NOTE: Dave Moore suggests doing this instead, to ensure 
             # that a batch dimension in alpha doesn't conflict with 
             # the other parameters.
             tfd.Beta(np.ones(K - 1, dtype), alpha[..., tf.newaxis]),
             reinterpreted_batch_ndims=1
         ),
-        # Alternatively,
-        # v = tfd.Dirichlet(np.ones(K, dtype) / K),
-
         # Observations (likelihood)
         obs = lambda mu, sigma, v: tfd.Sample(tfd.MixtureSameFamily(
             # This will be marginalized over.
             mixture_distribution=tfd.Categorical(probs=stickbreak(v)),
-            # mixture_distribution=tfd.Categorical(probs=v),
             components_distribution=tfd.Normal(mu, sigma)),
             sample_shape=nobs)
     ))
@@ -227,6 +206,9 @@ ncomponents = 10
 print('Create model ...')
 model = create_dp_sb_gmm(nobs=len(simdata['y']), K=ncomponents)
 
+# This allows the model to figure out dimensions of prob vector. 
+_ = model.sample()
+
 print('Define log unnormalized joint posterior density ...')
 def target_log_prob_fn(mu, sigma, alpha, v):
     return model.log_prob(obs=y, mu=mu, sigma=sigma, alpha=alpha, v=v)
@@ -237,7 +219,7 @@ def target_log_prob_fn(mu, sigma, alpha, v):
 # 
 # Credits: Thanks to Dave Moore at bayesflow for helping with the implementation!
 
-# In[25]:
+# In[11]:
 
 
 # This cell contains everything for initializing the 
@@ -270,13 +252,24 @@ surrogate_posterior = tfd.JointDistributionNamed(dict(
     alpha=tfd.LogNormal(qalpha_loc, tf.nn.softplus(qalpha_rho))))
 
 
-# In[26]:
+# In[12]:
 
 
-get_ipython().run_cell_magic('time', '', '# Run optimizer\nlosses = tfp.vi.fit_surrogate_posterior(\n    # target_log_prob_fn=model_log_prob,\n    target_log_prob_fn=target_log_prob_fn,\n    surrogate_posterior=surrogate_posterior,\n    optimizer=tf.optimizers.Adam(learning_rate=1e-2),  # 0.1, 0.01\n    sample_size=100,\n    seed=1, num_steps=2000)  # 200, 2000')
+# Run optimizer
+# @tf.function(autograph=False) , experimental_compile=True)  # Makes slower?
+def run_advi(optimizer, sample_size=1, num_steps=2000, seed=1):
+    return tfp.vi.fit_surrogate_posterior(
+        target_log_prob_fn=target_log_prob_fn,
+        surrogate_posterior=surrogate_posterior,
+        optimizer=optimizer,
+        sample_size=sample_size,
+        seed=seed, num_steps=num_steps)  # 200, 2000
+
+opt = tf.optimizers.Adam(learning_rate=1e-2)
+get_ipython().run_line_magic('time', 'losses = run_advi(opt, sample_size=1)')
 
 
-# In[27]:
+# In[13]:
 
 
 plt.plot(losses.numpy())
@@ -284,7 +277,7 @@ plt.xlabel('Optimizer Iteration')
 plt.ylabel('ELBO');
 
 
-# In[28]:
+# In[14]:
 
 
 # Extract posterior samples from VI
@@ -295,13 +288,12 @@ plot_all_params(advi_output, target_log_prob_fn)
 # ***
 # # MCMC
 
-# In[29]:
+# In[15]:
 
 
 # Create initial values..
 # For HMC, NUTS. Not necessary for ADVI, as ADVI has surrogate_posterior.
-def generate_initial_state(seed=None):
-    tf.random.set_seed(seed)
+def generate_initial_state():
     return [
         tf.zeros(ncomponents, dtype, name='mu'),
         tf.ones(ncomponents, dtype, name='sigma') * 0.1,
@@ -322,59 +314,48 @@ bijectors = [
     tfb.Sigmoid()  # v
 ]
 
-print('Define sampler ...')
-# Compile time negligible.
-# You may get weird errors if you put certain things in here...
-# For example, I can't do generate_initial_state inside
-# the function. I supposed this has something to do with
-# the `tf.function` decorator.
-#
-# Improve performance by tracing the sampler using `tf.function`
-# and compiling it using XLA.
-@tf.function(autograph=False)
-def sample(use_nuts, current_state, max_tree_depth=10):
-    if use_nuts:
-        ### NUTS ###
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
-            tfp.mcmc.TransformedTransitionKernel(
-                inner_kernel=tfp.mcmc.NoUTurnSampler(
-                     target_log_prob_fn=target_log_prob_fn,
-                     max_tree_depth=max_tree_depth, step_size=0.1, seed=1),
-                bijector=bijectors),
-            num_adaptation_steps=500,  # should be smaller than burn-in.
-            target_accept_prob=0.8)
-        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
-    else:
-        ### HMC ###
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
-            tfp.mcmc.TransformedTransitionKernel(
-                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
-                    target_log_prob_fn=target_log_prob_fn,
-                    step_size=0.01, num_leapfrog_steps=100, seed=1),
-                bijector=bijectors),
-            num_adaptation_steps=500)  # should be smaller than burn-in.
-        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted
-        
-    return tfp.mcmc.sample_chain(
-        num_results=500,
-        num_burnin_steps=500,
-        current_state=current_state,
-        # current_state=initial_states,
-        kernel=kernel,
-        trace_fn=trace_fn)
-
-
-# ## HMC
 
 # In[16]:
 
 
-print('Run HMC samplers ...')
-get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=False, current_state=generate_initial_state(1))  # 53 seconds.')
+# Define HMC sampler.
+
+@tf.function(autograph=False, experimental_compile=True)
+def hmc_sample(num_results, num_burnin_steps, current_state, step_size=0.01, num_leapfrog_steps=100):
+    return tfp.mcmc.sample_chain(
+        num_results=num_results,
+        num_burnin_steps=num_burnin_steps,
+        current_state=current_state,
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
+            tfp.mcmc.TransformedTransitionKernel(
+                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
+                    target_log_prob_fn=target_log_prob_fn,
+                    step_size=step_size, num_leapfrog_steps=num_leapfrog_steps, seed=1),
+                bijector=bijectors),
+            num_adaptation_steps=num_burnin_steps),
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
+
+
+# ## HMC
+
+# In[17]:
+
+
+tf.random.set_seed(7)
+
+# Compile time.
+current_state = generate_initial_state()  # generate initial values.
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = hmc_sample(1, 1, current_state=current_state)')
+
+# Run time.
+current_state = generate_initial_state()  # generate initial values.
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = hmc_sample(500, 500, current_state=current_state)  # 14.2 seconds.')
+
+# Store posterior samples.
 hmc_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
 
 
-# In[17]:
+# In[18]:
 
 
 # HMC posterior inference
@@ -383,15 +364,48 @@ plot_all_params(hmc_output, target_log_prob_fn)
 
 # ## NUTS
 
-# In[18]:
+# In[19]:
 
 
-print('Run NUTS samplers ...')
-get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = sample(use_nuts=True, current_state=generate_initial_state(1))  # 53 seconds.')
+# Define Nuts sampler.
+
+# Improve performance by tracing the sampler using `tf.function`
+# and compiling it using XLA.
+@tf.function(autograph=False, experimental_compile=True)
+def nuts_sample(num_results, num_burnin_steps, current_state, max_tree_depth=10):
+    return tfp.mcmc.sample_chain(
+        num_results=num_results,
+        num_burnin_steps=num_burnin_steps,
+        current_state=current_state,
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
+            tfp.mcmc.TransformedTransitionKernel(
+                inner_kernel=tfp.mcmc.NoUTurnSampler(
+                     target_log_prob_fn=target_log_prob_fn,
+                     max_tree_depth=max_tree_depth, step_size=0.01, seed=1),
+                bijector=bijectors),
+            num_adaptation_steps=num_burnin_steps,  # should be smaller than burn-in.
+            target_accept_prob=0.8),
+        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
+
+
+# In[20]:
+
+
+tf.random.set_seed(7)
+
+# Compile time.
+current_state = generate_initial_state()
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = nuts_sample(1, 1, current_state=current_state, max_tree_depth=1)  # 15 seconds.')
+
+# Run time.
+current_state = generate_initial_state()
+get_ipython().run_line_magic('time', '[mu, sigma, alpha, v], is_accepted = nuts_sample(500, 500, current_state=current_state)  # 36 seconds.')
+
+# Store posterior samples.
 nuts_output = dict(mu=mu, sigma=sigma, alpha=alpha, v=v, acceptance_rate=is_accepted.numpy().mean())
 
 
-# In[19]:
+# In[21]:
 
 
 # NUTS posterior inference

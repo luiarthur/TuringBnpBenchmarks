@@ -8,7 +8,7 @@ def read_file(path):
     return content
 
 def tosec(t):
-    return round(float(re.findall(r'.*(?=s)', t)[0]))
+    return float(re.findall(r'.*(?=s)', t)[0])
 
 def minsec2sec(t):
     m = re.findall(r'\d+(?=min)', t)[0]
@@ -73,11 +73,11 @@ def get_dp_sb_gmm_tfp_times(path):
     return dict(model='dp_sb_gmm',
                 ppl='tfp',
                 advi_compile=0,
-                hmc_compile=0,
-                nuts_compile=0,
+                hmc_compile=t[1],
+                nuts_compile=t[3],
                 advi_run=t[0],
-                hmc_run=t[1],
-                nuts_run=t[2])
+                hmc_run=t[2],
+                nuts_run=t[4])
 
 def get_dp_sb_gmm_pyro_times(path):
     nb_content = read_file(path)
@@ -148,6 +148,22 @@ if __name__ == '__main__':
     times_df.insert(0, "model", model)
     times_df.insert(0, "ppl", ppl)
 
-    # Save CSV
-    times_df.round().to_csv('../timings/timings.csv', index=False, na_rep='NA')
+    # # Save CSV
+    # times_df.round().to_csv('../timings/timings.csv', index=False, na_rep='NA')
 
+    # Save CSV
+    times_df = times_df[['ppl',
+                         'advi_run', 'hmc_run', 'nuts_run',
+                         'advi_compile', 'hmc_compile', 'nuts_compile']]
+    times_df = times_df.rename(columns={"ppl": "PPL",
+                                        "advi_run": "ADVI (run)",
+                                        "hmc_run": "HMC (run)",
+                                        "nuts_run": "NUTS (run)",
+                                        "advi_compile": "ADVI (compile)",
+                                        "hmc_compile": "HMC (compile)",
+                                        "nuts_compile": "NUTS (compile)"})
+    times_df = times_df.round(1)
+    times_df.to_csv('../timings/timings.csv', index=False, na_rep='NA')
+
+    print(times_df)
+    print('Written to ../timings/timings.csv')
