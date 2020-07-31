@@ -138,7 +138,8 @@ bijectors = [
 
 # Define HMC sampler.
 @tf.function(autograph=False, experimental_compile=True)
-def hmc_sample(num_results, num_burnin_steps, current_state, step_size=0.01, num_leapfrog_steps=100):
+def hmc_sample(num_results, num_burnin_steps, current_state, step_size=0.01,
+               num_leapfrog_steps=100):
     return tfp.mcmc.sample_chain(
         num_results=num_results,
         num_burnin_steps=num_burnin_steps,
