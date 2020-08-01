@@ -1,5 +1,5 @@
 PPL,ADVI (run),HMC (run),NUTS (run),ADVI (compile),HMC (compile),NUTS (compile)
-stan,0.165,1.38,0.562,52.1,52.1,57.1
+stan,0.165,1.38,0.562,52.1,52.1,52.1
 turing,0.589,13.572,0.909,5.884,12.326,13.898
 pyro,NA,508.0,25.0,NA,0.0,0.0
 numpyro,NA,5.0,7.0,NA,3.99,1.61
