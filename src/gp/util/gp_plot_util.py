@@ -40,11 +40,9 @@ def plot_post(samples, key, bins=None, suffix=""):
 # Function for making all plots.
 def make_plots(samples, x, y, x_grid, f, sigma_true, cov_fn=sqexp_cov_fn,
                n_new=100, figsize=(12,4), figsize_f=(12, 4), suffix="",
-               x_min=-3.5, x_max=3.5, ci=95, eps=1e-3):
+               x_min=-3.5, x_max=3.5, ci=95):
     # Create new locations for prediction.
-    # But include the data for illustrative purposes.
     x_new = np.linspace(x_min, x_max, n_new)
-    x_new = np.sort(np.concatenate((x_new, x)))
 
     # Create gp predict function.
     gp_predict = gp_predict_maker(y, x, x_new, cov_fn)

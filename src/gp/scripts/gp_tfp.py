@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[21]:
+# In[1]:
 
 
 get_ipython().system('echo "Last updated: `date`"')
@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated: `date`"')
 # - https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/GaussianProcessRegressionModel
 # - https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/GaussianProcess
 
-# In[22]:
+# In[2]:
 
 
 # Import libraries.
@@ -41,7 +41,7 @@ tf.random.set_seed(1)
 # tf.config.threading.set_inter_op_parallelism_threads(4)
 
 
-# In[23]:
+# In[3]:
 
 
 # Read data.
@@ -70,7 +70,7 @@ plt.legend();
 # 
 # where $\alpha$ is the amplitude of the covariance, $\rho$ is the length scale which controls how slowly information decays with distance (larger $\rho$ means information about a point can be used for data far away); and $d$ is the distance.
 
-# In[37]:
+# In[4]:
 
 
 # Specify GP model
@@ -106,7 +106,7 @@ def unnormalized_log_posterior(amplitude, length_scale, v):
     return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, v=v, obs=y)
 
 
-# In[38]:
+# In[5]:
 
 
 # @tf.function(autograph=False, experimental_compile=True)  # Slower?
@@ -128,14 +128,14 @@ def run_hmc(num_results, num_burnin_steps):
           trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
 
-# In[39]:
+# In[6]:
 
 
 # set random seed
-tf.random.set_seed(1)
+tf.random.set_seed(2)
 
 # Compile
-get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_hmc(1, 1)')
+get_ipython().run_line_magic('time', '_ = run_hmc(1, 1)')
 
 # Run
 get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_hmc(1000, 1000)')
@@ -144,10 +144,11 @@ get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepte
 print("Acceptance rate: {}".format(np.mean(is_accepted)))
 
 # Collect posterior samples.
-hmc_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(), sigma=np.sqrt(sigma.numpy()))
+hmc_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(),
+                   sigma=np.sqrt(v.numpy()))
 
 
-# In[40]:
+# In[7]:
 
 
 # @tf.function(autograph=False, experimental_compile=True)  # Slower?
@@ -170,14 +171,14 @@ def run_nuts(num_results, num_burnin_steps):
           trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
 
-# In[41]:
+# In[8]:
 
 
 # set random seed
 tf.random.set_seed(1)
 
 # Compile
-get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_nuts(1, 1)')
+get_ipython().run_line_magic('time', '_ = run_nuts(1, 1)')
 
 # Run
 get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_nuts(1000, 1000)')
@@ -186,30 +187,31 @@ get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepte
 print("Acceptance rate: {}".format(np.mean(is_accepted)))
 
 # Collect posterior samples.
-nuts_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(), sigma=np.sqrt(v.numpy()))
+nuts_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(),
+                    sigma=np.sqrt(v.numpy()))
 
 
-# In[42]:
+# In[9]:
 
 
 # Plot posterior for HMC
 gp_plot_util.make_plots(hmc_samples, suffix="HMC",
-                        x=np.array(simdata['x']), y=np.array(simdata['y']),
-                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
+                        x=X, y=y, x_grid=x_grid, f=f,
+                        sigma_true=simdata['sigma'])
 
 
-# In[43]:
+# In[10]:
 
 
 # Plot posterior for NUTS
 gp_plot_util.make_plots(nuts_samples, suffix="NUTS",
-                        x=np.array(simdata['x']), y=np.array(simdata['y']),
-                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
+                        x=X, y=y, x_grid=x_grid, f=f,
+                        sigma_true=simdata['sigma'])
 
 
 # ## ADVI
 
-# In[47]:
+# In[11]:
 
 
 # Variational distribution, which approximates the true posterior.
@@ -244,14 +246,14 @@ def run_advi(sample_size, num_steps):
         num_steps=num_steps)  # Number of iterations to run optimizer. 
 
 
-# In[48]:
+# In[12]:
 
 
 # Fit GP via ADVI.
 get_ipython().run_line_magic('time', 'losses = run_advi(sample_size=1, num_steps=2000)')
 
 
-# In[49]:
+# In[13]:
 
 
 # Plot loss.
@@ -266,13 +268,14 @@ advi_samples = dict(alpha=advi_samples['amplitude'].numpy(),
                     sigma=np.sqrt(advi_samples['v'].numpy()))
 
 
-# In[50]:
+# In[14]:
 
 
 # Plot posterior for ADVI.
 gp_plot_util.make_plots(advi_samples, suffix="ADVI",
                         x=np.array(simdata['x']), y=np.array(simdata['y']),
-                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
+                        x_grid=simdata['x_grid'], f=simdata['f'],
+                        sigma_true=simdata['sigma'])
 
 
 # In[ ]:

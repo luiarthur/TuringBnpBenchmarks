@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated:" `date`')
 # 
 # This notebook demonstrates how a GP is specified and sampled from in STAN.
 
-# In[5]:
+# In[2]:
 
 
 import pystan
@@ -91,7 +91,7 @@ model {
 get_ipython().run_cell_magic('time', '', '# Compile model. This takes about a minute.\nsm = pystan.StanModel(model_code=gp_model_code)')
 
 
-# In[6]:
+# In[5]:
 
 
 # Read data.
@@ -106,7 +106,7 @@ plt.ylabel('y = f(x)')
 plt.legend();
 
 
-# In[23]:
+# In[6]:
 
 
 # Data dictionary.
@@ -115,25 +115,25 @@ data = dict(y=simdata['y'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
             m_rho=0, s_rho=1.0, m_alpha=0, s_alpha=0.1, m_sigma=0, s_sigma=1)
 
 
-# In[24]:
+# In[7]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2, grad_samples=1, elbo_samples=1)\nvb_samples = pystan_vb_extract(vb_fit)')
 
 
-# In[25]:
+# In[8]:
 
 
 get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
-# In[26]:
+# In[9]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via NUTS\nnuts_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1, seed=1)')
 
 
-# In[28]:
+# In[10]:
 
 
 gp_plot_util.make_plots(vb_samples, suffix="ADVI",
@@ -141,7 +141,7 @@ gp_plot_util.make_plots(vb_samples, suffix="ADVI",
                         x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
-# In[29]:
+# In[11]:
 
 
 gp_plot_util.make_plots(hmc_fit, suffix="HMC",
@@ -149,7 +149,7 @@ gp_plot_util.make_plots(hmc_fit, suffix="HMC",
                         x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
-# In[30]:
+# In[12]:
 
 
 gp_plot_util.make_plots(nuts_fit, suffix="NUTS",

@@ -50,7 +50,9 @@ bijectors = [
 
 # Unnormalized log posterior
 def unnormalized_log_posterior(amplitude, length_scale, v):
-    return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, v=v, obs=y)
+    return gp_model.log_prob(amplitude=amplitude,
+                             length_scale=length_scale,
+                             v=v, obs=y)
 
 # Create a function to run HMC.
 @tf.function(autograph=False)
