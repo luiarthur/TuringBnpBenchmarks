@@ -3,19 +3,21 @@
 # NOTE: Read Data ...
 
 # Define GP Model
-def make_gp_model(X, y, noise=torch.tensor(1e-3).sqrt(),
-                  length_prior=dist.LogNormal(-2, 0.1),
-                  variance_prior=dist.LogNormal(0.0, 1.0)):
+def make_gp_model(X, y,
+                  length_prior=dist.LogNormal(0.0, 1.0),
+                  variance_prior=dist.LogNormal(0.0, 0.1),
+                  noise_prior=dist.LogNormal(0.0, 1.0)):
     
     # Define squared exponential covariance function.
     cov_fn = gp.kernels.RBF(input_dim=1)
 
     # Define GP regression model.
-    gpr = gp.models.GPRegression(X, y, cov_fn, noise=noise)
+    gpr = gp.models.GPRegression(X, y, cov_fn)
 
     # Place priors on GP covariance function parameters.
     gpr.kernel.lengthscale = pyro.nn.PyroSample(length_prior)
     gpr.kernel.variance = pyro.nn.PyroSample(variance_prior)
+    gpr.noise = pyro.nn.PyroSample(noise_prior)
     
     return gpr
 

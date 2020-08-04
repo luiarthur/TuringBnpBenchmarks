@@ -22,12 +22,13 @@ tf.random.set_seed(1)
 
 # Specify GP model
 gp_model = tfd.JointDistributionNamed(dict(
-    amplitude=tfd.LogNormal(dtype(0), dtype(1)),  # amplitude
-    length_scale=tfd.LogNormal(dtype(-2), dtype(0.1)),  # length scale
-    obs=lambda length_scale, amplitude: tfd.GaussianProcess(
+    amplitude=tfd.LogNormal(dtype(0), dtype(0.1)),  # amplitude
+    length_scale=tfd.LogNormal(dtype(0), dtype(1)),  # length scale
+    v=tfd.LogNormal(dtype(0), dtype(1)),  # model sd
+    obs=lambda length_scale, amplitude, v: tfd.GaussianProcess(
           kernel=tfp.math.psd_kernels.ExponentiatedQuadratic(amplitude, length_scale),
           index_points=X[..., np.newaxis],
-          observation_noise_variance=dtype(0), jitter=1e-3)
+          observation_noise_variance=v)
 ))
 
 # Run graph to make sure it works.
@@ -36,18 +37,20 @@ _ = gp_model.sample()
 # Initial values.
 initial_state = [
     1e-1 * tf.ones([], dtype=np.float64, name='amplitude'),
-    1e-1 * tf.ones([], dtype=np.float64, name='length_scale')
+    1e-1 * tf.ones([], dtype=np.float64, name='length_scale'),
+    1e-1 * tf.ones([], dtype=np.float64, name='v')
 ]
 
 # Bijectors (from unconstrained to constrained space)
 bijectors = [
     tfp.bijectors.Softplus(),  # amplitude
-    tfp.bijectors.Softplus()  # length_scale
+    tfp.bijectors.Softplus(),  # length_scale
+    tfp.bijectors.Softplus()  # v
 ]
 
 # Unnormalized log posterior
-def unnormalized_log_posterior(amplitude, length_scale):
-    return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, obs=y)
+def unnormalized_log_posterior(amplitude, length_scale, v):
+    return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, v=v, obs=y)
 
 # Create a function to run HMC.
 @tf.function(autograph=False)
@@ -68,7 +71,7 @@ def run_hmc(num_results, num_burnin_steps):
 
 
 # Run HMC.
-[amplitudes, length_scales], is_accepted = run_hmc(1000, 1000)
+[amplitudes, length_scales, v], is_accepted = run_hmc(1000, 1000)
 
 
 # Create function to run NUTS.
@@ -91,7 +94,7 @@ def run_nuts(num_results, num_burnin_steps):
 
 
 # Run NUTS.
-[amplitudes, length_scales], is_accepted = run_nuts(1000, 1000)
+[amplitudes, length_scales, v], is_accepted = run_nuts(1000, 1000)
 
 
 ### ADVI ###
@@ -102,10 +105,14 @@ qamp_rho = tf.Variable(tf.random.normal([], dtype=dtype) - 1, name='qamp_rho')
 qlength_loc = tf.Variable(tf.random.normal([], dtype=dtype), name='qlength_loc')
 qlength_rho = tf.Variable(tf.random.normal([], dtype=dtype), name='qlength_rho')
 
+qv_loc = tf.Variable(tf.random.normal([], dtype=dtype), name='qv_loc')
+qv_rho = tf.Variable(tf.random.normal([], dtype=dtype), name='qv_rho')
+
 # Create variational distribution.
 surrogate_posterior = tfd.JointDistributionNamed(dict(
     amplitude=tfd.LogNormal(qamp_loc, tf.nn.softplus(qamp_rho)),
     length_scale=tfd.LogNormal(qlength_loc, tf.nn.softplus(qlength_rho))
+    v=tfd.LogNormal(qv_loc, tf.nn.softplus(qv_rho))
 ))
 
 # Function for running ADVI.

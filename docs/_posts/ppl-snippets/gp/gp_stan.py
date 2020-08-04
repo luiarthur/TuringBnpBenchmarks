@@ -9,13 +9,14 @@ data {
     int N;               // number of observations
     vector[N] y;         // response
     matrix[N, D] X;      // predictors
-    real<lower=0> eps;   // amount to add to diagonal of covariance function (for numerical stability)
     
     // hyperparameters for GP covariance function range and scale.
     real m_rho;
     real<lower=0> s_rho;
     real m_alpha;
     real<lower=0> s_alpha;
+    real m_sigma;
+    real<lower=0> s_sigma;
 }
 
 transformed data {
@@ -26,6 +27,7 @@ transformed data {
 parameters {
     real<lower=0> rho;   // range parameter in GP covariance fn
     real<lower=0> alpha; // covariance scale parameter in GP covariance fn
+    real<lower=0> sigma;   // model sd
 }
 
 model {
@@ -34,6 +36,7 @@ model {
 
     rho ~ lognormal(m_rho, s_rho);  // GP covariance function range parameter
     alpha ~ lognormal(m_alpha, s_alpha);  // GP covariance function scale parameter
+    sigma ~ lognormal(m_sigma, s_sigma);  // model sd.
    
     // Using exponential quadratic covariance function
     // K(d) = alpha^2 * exp(-0.5 * (d/rho)^2)
@@ -41,7 +44,7 @@ model {
     
     // Add small values along diagonal elements for numerical stability.
     for (n in 1:N) {
-        K[n, n] = K[n, n] + eps;
+        K[n, n] = K[n, n] + sigma^2;
     }
         
     // Cholesky of K (lower triangle).
@@ -55,6 +58,10 @@ model {
 
 # Compile model. This takes about a minute.
 sm = pystan.StanModel(model_code=gp_model_code)
+
+# Data dictionary.
+data = dict(y=y, X=X, N=y.shape[0], D=1,
+            m_rho=0, s_rho=1.0, m_alpha=0, s_alpha=0.1, m_sigma=0, s_sigma=1)
 
 # Fit via ADVI.
 vb_fit = sm.vb(data=data, iter=2000, seed=2, grad_samples=1, elbo_samples=1)

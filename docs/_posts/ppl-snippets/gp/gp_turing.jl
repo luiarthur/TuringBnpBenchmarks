@@ -3,32 +3,34 @@
 # NOTE: Read data ...
 
 # Squared-exponential covariance function.
-function sqexp_cov_fn(D, alpha, rho, eps=1e-3)
-  return alpha ^ 2 * exp.(-0.5 * (D/rho) .^ 2) + LinearAlgebra.I * eps
-end
+sqexp_cov_fn(Dsq, alpha, rho) = alpha^2 * exp.(-Dsq/(2 * rho^2))
 
 # Define GP model.
-@model function GP(y, X, cov_fn=sqexp_cov_fn, m_alpha=0.0, s_alpha=1.0,
-                   m_rho=0.0, s_rho=1.0)
-    # Distance matrix.
-    D = pairwise(Distances.Euclidean(), X, dims=1)
+@model function GP(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0, s_rho=1.0,
+                   m_sigma=0.0, s_sigma=1.0)
+    # Squared distance matrix.
+    Dsq = pairwise(Distances.SqEuclidean(), X, dims=1)
     
     # Priors.
     alpha ~ LogNormal(m_alpha, s_alpha)
     rho ~ LogNormal(m_rho, s_rho)
+    sigma ~ LogNormal(m_sigma, s_sigma)
     
     # Realized covariance function
-    K = cov_fn(D, alpha, rho)
+    K = sqexp_cov_fn(Dsq, alpha, rho)
     
     # Sampling Distribution.
-    y ~ MvNormal(K)  # mean=0, covariance=K.
-end
+    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K.
+end;
 
 # Set random number generator seed.
 Random.seed!(0)  
 
+# Model creation.
+m = GP(y, X, sqexp_cov_fn, 0.0, 1.0, -2.0, 0.1)
+
+
 # Fit via ADVI.
-m = GP(y, X, sqexp_cov_fn, 0.0, 1.0, -2.0, 0.1)  # Model creation.
 q0 = Variational.meanfield(m)  # initialize variational distribution (optional)
 num_elbo_samples, max_iters = (1, 2000)
 # Run optimizer.
@@ -42,11 +44,6 @@ nsamples = 1000
 @time chain = sample(m, HMC(0.01, 100), burn + nsamples)  # start sampling.
 
 
-# Get posterior samples
-alpha = vec(group(chain, :alpha).value.data[end-nsamples:end, :, 1]);
-rho = vec(group(chain, :rho).value.data[end-nsamples:end, :, 1]);
-hmc_samples = Dict(:alpha => alpha, :rho => rho)
-
 # Fit via NUTS.
 @time chain = begin
     nsamples = 1000  # number of MCMC samples
@@ -56,8 +53,3 @@ hmc_samples = Dict(:alpha => alpha, :rho => rho)
     
     sample(m, NUTS(nadapt, target_accept_ratio, max_depth=10), iterations);
 end
-
-# Get posterior samples
-alpha = vec(group(chain, :alpha).value.data[:, :, 1]);
-rho = vec(group(chain, :rho).value.data[:, :, 1]);
-nuts_samples = Dict(:alpha => alpha, :rho => rho);
