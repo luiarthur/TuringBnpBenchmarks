@@ -8,7 +8,7 @@ np.random.seed(1)
 def f(x):
     return np.sin(3 * x) * np.sin(x) * (-1)**(x > 0)
 
-def make_data(nobs, ngrid=1000):
+def make_data(nobs, ngrid=1000, noise=0.1):
     """
     nobs (int): number of observations.
     ngrid (int): number of grid points in fine grid for plotting true function.
@@ -17,17 +17,18 @@ def make_data(nobs, ngrid=1000):
     x = np.random.rand(nobs) * 6 - 3
 
     # Response.
-    y = f(x)
+    y = f(x) + np.random.randn(nobs) * noise
 
     # Finer grid for plotting true function.
-    x_true = np.linspace(-3.5, 3.5, ngrid)
-    f_true = f(x_true)
+    x_grid = np.linspace(-3.5, 3.5, ngrid)
+    f_true = f(x_grid)
 
     # Create output
     output = dict(x=x.round(3).tolist(),
-                  f=y.round(3).tolist(),
-                  x_true=x_true.round(3).tolist(),
-                  f_true=f_true.round(3).tolist())
+                  y=y.round(3).tolist(),
+                  x_grid=x_grid.round(3).tolist(),
+                  f=f_true.round(3).tolist(),
+                  sigma=noise)
 
     return output
 
