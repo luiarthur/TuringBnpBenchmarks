@@ -79,7 +79,7 @@ N = size(X, 1);
 plt.scatter(vec(X), y, label="Data")
 plt.plot(x_grid, f, c="grey", ls=":", label="True f(x)")
 plt.xlabel("x")
-plt.ylabel("y = f(x)")
+plt.ylabel("y")
 plt.legend();
 
 # Create model.

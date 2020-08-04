@@ -230,7 +230,7 @@ qv_rho = tf.Variable(tf.random.normal([], dtype=dtype), name='qv_rho')
 surrogate_posterior = tfd.JointDistributionNamed(dict(
     amplitude=tfd.LogNormal(qamp_loc, tf.nn.softplus(qamp_rho)),
     length_scale=tfd.LogNormal(qlength_loc, tf.nn.softplus(qlength_rho)),
-    v=tfd.LogNormal(qv_loc, tf.nn.softplus(qv_rho)),
+    v=tfd.LogNormal(qv_loc, tf.nn.softplus(qv_rho))
 ))
 
 # Function for running ADVI.
