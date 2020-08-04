@@ -31,18 +31,24 @@ end
 ;
 
 # Squared-exponential covariance function
-sqexp_cov_fn(D, alpha, rho, eps=1e-3) = alpha ^ 2 * exp.(-0.5 * (D/rho) .^ 2) + LinearAlgebra.I * eps
+function sqexp_cov_fn(D, alpha, rho; eps=1e-3, d_is_squared=false)
+    if d_is_squared
+        return alpha ^ 2 * exp.(-0.5 * D/(rho^2)) + LinearAlgebra.I * eps
+    else
+        return alpha ^ 2 * exp.(-0.5 * (D/rho) .^ 2) + LinearAlgebra.I * eps
+    end
+end
 
-@model function GP(y, X, cov_fn=sqexp_cov_fn, m_alpha=0.0, s_alpha=1.0, m_rho=0.0, s_rho=1.0)
+@model function GP(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0, s_rho=1.0)
     # Distance matrix.
-    D = pairwise(Distances.Euclidean(), X, dims=1)
+    D2 = pairwise(Distances.SqEuclidean(), X, dims=1)
     
     # Priors.
     alpha ~ LogNormal(m_alpha, s_alpha)
     rho ~ LogNormal(m_rho, s_rho)
     
     # Realized covariance function
-    K = cov_fn(D, alpha, rho)
+    K = sqexp_cov_fn(D2, alpha, rho, d_is_squared=true)
     
     # Sampling Distribution.
     y ~ MvNormal(K)  # mean=0, covariance=K.
@@ -74,7 +80,7 @@ plt.legend();
 # Fit via ADVI. You can also use HMC.
 Random.seed!(0)
 
-m = GP(y, X, sqexp_cov_fn, 0.0, 1.0, -2.0, 0.1)
+m = GP(y, X, 0.0, 1.0, -2.0, 0.1)
 q0 = Variational.meanfield(m)  # initialize variational distribution (optional)
 
 # NOTE: ADVI(num_elbo_samples, max_iters)
@@ -129,15 +135,15 @@ rho = vec(group(chain, :rho).value.data[:, :, 1]);
 nuts_samples = Dict(:alpha => alpha, :rho => rho);
 
 # This funciton returns a function for predicting at new points given parameter values.
-function make_gp_predict_fn(Xnew, y, X, cov_fn)
+function make_gp_predict_fn(Xnew, y, X)
     N = size(X, 1)
     M = size(Xnew, 1)
     Q = N + M
     Z = [Xnew; X]
-    D = pairwise(Euclidean(), Z, dims=1)
+    D2 = pairwise(SqEuclidean(), Z, dims=1)
     
     return (alpha, rho) -> let
-        K = cov_fn(D, alpha, rho)
+        K = sqexp_cov_fn(D2, alpha, rho, d_is_squared=true)
         Koo_inv = inv(K[(M+1):end, (M+1):end])
         Knn = K[1:M, 1:M]
         Kno = K[1:M, (M+1):end]
@@ -175,7 +181,7 @@ function plot_fn_posterior(samples; figsize=(12, 4), figsize_f=figsize, suffix="
     
     # Make predictions at new locations.
     X_new = reshape(collect(range(-3.5, 3.5, length=100)), 100, 1)
-    gp_predict = make_gp_predict_fn(X_new, y, X, sqexp_cov_fn)
+    gp_predict = make_gp_predict_fn(X_new, y, X)
     ynew = [gp_predict(alpha[m], rho[m]) for m in 1:length(alpha)]
     ynew = hcat(ynew...);
 
