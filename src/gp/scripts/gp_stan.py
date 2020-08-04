@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated:" `date`')
 # 
 # This notebook demonstrates how a GP is specified and sampled from in STAN.
 
-# In[2]:
+# In[5]:
 
 
 import pystan
@@ -38,13 +38,14 @@ data {
     int N;               // number of observations
     vector[N] y;         // response
     matrix[N, D] X;      // predictors
-    real<lower=0> eps;   // amount to add to diagonal of covariance function (for numerical stability)
     
     // hyperparameters for GP covariance function range and scale.
     real m_rho;
     real<lower=0> s_rho;
     real m_alpha;
     real<lower=0> s_alpha;
+    real m_sigma;
+    real<lower=0> s_sigma;
 }
 
 transformed data {
@@ -55,6 +56,7 @@ transformed data {
 parameters {
     real<lower=0> rho;   // range parameter in GP covariance fn
     real<lower=0> alpha; // covariance scale parameter in GP covariance fn
+    real<lower=0> sigma;   // model sd
 }
 
 model {
@@ -63,6 +65,7 @@ model {
 
     rho ~ lognormal(m_rho, s_rho);  // GP covariance function range parameter
     alpha ~ lognormal(m_alpha, s_alpha);  // GP covariance function scale parameter
+    sigma ~ lognormal(m_sigma, s_sigma);  // model sd.
    
     // Using exponential quadratic covariance function
     // K(d) = alpha^2 * exp(-0.5 * (d/rho)^2)
@@ -70,7 +73,7 @@ model {
     
     // Add small values along diagonal elements for numerical stability.
     for (n in 1:N) {
-        K[n, n] = K[n, n] + eps;
+        K[n, n] = K[n, n] + sigma^2;
     }
         
     // Cholesky of K (lower triangle).
@@ -88,7 +91,7 @@ model {
 get_ipython().run_cell_magic('time', '', '# Compile model. This takes about a minute.\nsm = pystan.StanModel(model_code=gp_model_code)')
 
 
-# In[5]:
+# In[6]:
 
 
 # Read data.
@@ -96,62 +99,62 @@ path_to_data = '../data/gp-data-N30.json'
 simdata = json.load(open(path_to_data))
 
 # Plot data and true function.
-plt.scatter(simdata['x'], simdata['f'], label='data')
-plt.plot(simdata['x_true'], simdata['f_true'], ls=':', c='grey', label='true f(x)')
+plt.scatter(simdata['x'], simdata['y'], label='data')
+plt.plot(simdata['x_grid'], simdata['f'], ls=':', c='grey', label='true f(x)')
 plt.xlabel('x')
 plt.ylabel('y = f(x)')
 plt.legend();
 
 
-# In[6]:
+# In[23]:
 
 
 # Data dictionary.
 N = len(simdata['x'])
-data = dict(y=simdata['f'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
-            eps=1e-3, m_rho=-2, s_rho=0.1, m_alpha=0, s_alpha=1)
+data = dict(y=simdata['y'], X=np.reshape(simdata['x'], (N, 1)), N=N, D=1,
+            m_rho=0, s_rho=1.0, m_alpha=0, s_alpha=0.1, m_sigma=0, s_sigma=1)
 
 
-# In[7]:
+# In[24]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=data, iter=2000, seed=2, grad_samples=1, elbo_samples=1)\nvb_samples = pystan_vb_extract(vb_fit)')
 
 
-# In[8]:
+# In[25]:
 
 
 get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
 
 
-# In[9]:
+# In[26]:
 
 
 get_ipython().run_cell_magic('time', '', '# Fit via NUTS\nnuts_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1, seed=1)')
 
 
-# In[10]:
+# In[28]:
 
 
 gp_plot_util.make_plots(vb_samples, suffix="ADVI",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
-# In[11]:
+# In[29]:
 
 
 gp_plot_util.make_plots(hmc_fit, suffix="HMC",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
-# In[12]:
+# In[30]:
 
 
 gp_plot_util.make_plots(nuts_fit, suffix="NUTS",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
 # In[ ]:

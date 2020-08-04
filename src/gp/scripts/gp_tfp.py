@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[21]:
 
 
 get_ipython().system('echo "Last updated: `date`"')
@@ -11,7 +11,7 @@ get_ipython().system('echo "Last updated: `date`"')
 # - https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/GaussianProcessRegressionModel
 # - https://www.tensorflow.org/probability/api_docs/python/tfp/distributions/GaussianProcess
 
-# In[2]:
+# In[22]:
 
 
 # Import libraries.
@@ -41,25 +41,25 @@ tf.random.set_seed(1)
 # tf.config.threading.set_inter_op_parallelism_threads(4)
 
 
-# In[3]:
+# In[23]:
 
 
 # Read data.
 path_to_data = '../data/gp-data-N30.json'
 simdata = json.load(open(path_to_data))
 
+# Store data as torch.tensors.
+X = np.array(simdata['x'])
+y = np.array(simdata['y'])
+x_grid = np.array(simdata['x_grid'])
+f = np.array(simdata['f'])
+
 # Plot data and true function.
-plt.scatter(simdata['x'], simdata['f'], label='data')
-plt.plot(simdata['x_true'], simdata['f_true'], ls=':', c='grey', label='true f(x)')
+plt.scatter(X, y, label='data')
+plt.plot(x_grid, f, ls=':', c='grey', label='true f(x)')
 plt.xlabel('x')
 plt.ylabel('y = f(x)')
 plt.legend();
-
-# Store data as torch.tensors.
-X = np.array(simdata['x'])
-y = np.array(simdata['f'])
-x_true = np.array(simdata['x_true'])
-f_true = np.array(simdata['f_true'])
 
 
 # Here we will use the squared exponential covariance function:
@@ -70,17 +70,18 @@ f_true = np.array(simdata['f_true'])
 # 
 # where $\alpha$ is the amplitude of the covariance, $\rho$ is the length scale which controls how slowly information decays with distance (larger $\rho$ means information about a point can be used for data far away); and $d$ is the distance.
 
-# In[4]:
+# In[37]:
 
 
 # Specify GP model
 gp_model = tfd.JointDistributionNamed(dict(
-    amplitude=tfd.LogNormal(dtype(0), dtype(1)),  # amplitude
-    length_scale=tfd.LogNormal(dtype(-2), dtype(0.1)),  # length scale
-    obs=lambda length_scale, amplitude: tfd.GaussianProcess(
+    amplitude=tfd.LogNormal(dtype(0), dtype(0.1)),  # amplitude
+    length_scale=tfd.LogNormal(dtype(0), dtype(1)),  # length scale
+    v=tfd.LogNormal(dtype(0), dtype(1)),  # model sd
+    obs=lambda length_scale, amplitude, v: tfd.GaussianProcess(
           kernel=tfp.math.psd_kernels.ExponentiatedQuadratic(amplitude, length_scale),
           index_points=X[..., np.newaxis],
-          observation_noise_variance=dtype(0), jitter=1e-3)
+          observation_noise_variance=v)
 ))
 
 # Run graph to make sure it works.
@@ -89,24 +90,27 @@ _ = gp_model.sample()
 # Initial values.
 initial_state = [
     1e-1 * tf.ones([], dtype=np.float64, name='amplitude'),
-    1e-1 * tf.ones([], dtype=np.float64, name='length_scale')
+    1e-1 * tf.ones([], dtype=np.float64, name='length_scale'),
+    1e-1 * tf.ones([], dtype=np.float64, name='v')
 ]
 
 # Bijectors (from unconstrained to constrained space)
 bijectors = [
     tfp.bijectors.Softplus(),  # amplitude
-    tfp.bijectors.Softplus()  # length_scale
+    tfp.bijectors.Softplus(),  # length_scale
+    tfp.bijectors.Softplus()  # v
 ]
 
 # Unnormalized log posterior
-def unnormalized_log_posterior(amplitude, length_scale):
-    return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, obs=y)
+def unnormalized_log_posterior(amplitude, length_scale, v):
+    return gp_model.log_prob(amplitude=amplitude, length_scale=length_scale, v=v, obs=y)
 
 
-# In[5]:
+# In[38]:
 
 
 # @tf.function(autograph=False, experimental_compile=True)  # Slower?
+# @tfp.experimental.nn.util.tfcompile  # no speedup.
 @tf.function(autograph=False)
 def run_hmc(num_results, num_burnin_steps):
       return tfp.mcmc.sample_chain(
@@ -124,26 +128,26 @@ def run_hmc(num_results, num_burnin_steps):
           trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
 
-# In[6]:
+# In[39]:
 
 
 # set random seed
 tf.random.set_seed(1)
 
 # Compile
-get_ipython().run_line_magic('time', '[amplitudes, length_scales], is_accepted = run_hmc(1, 1)')
+get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_hmc(1, 1)')
 
 # Run
-get_ipython().run_line_magic('time', '[amplitudes, length_scales], is_accepted = run_hmc(1000, 1000)')
+get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_hmc(1000, 1000)')
 
 # Print acceptance rate.
 print("Acceptance rate: {}".format(np.mean(is_accepted)))
 
 # Collect posterior samples.
-hmc_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy())
+hmc_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(), sigma=np.sqrt(sigma.numpy()))
 
 
-# In[7]:
+# In[40]:
 
 
 # @tf.function(autograph=False, experimental_compile=True)  # Slower?
@@ -166,46 +170,46 @@ def run_nuts(num_results, num_burnin_steps):
           trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
 
 
-# In[8]:
+# In[41]:
 
 
 # set random seed
 tf.random.set_seed(1)
 
 # Compile
-get_ipython().run_line_magic('time', '[amplitudes, length_scales], is_accepted = run_nuts(1, 1)')
+get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_nuts(1, 1)')
 
 # Run
-get_ipython().run_line_magic('time', '[amplitudes, length_scales], is_accepted = run_nuts(1000, 1000)')
+get_ipython().run_line_magic('time', '[amplitudes, length_scales, v], is_accepted = run_nuts(1000, 1000)')
 
 # Print acceptance rate.
 print("Acceptance rate: {}".format(np.mean(is_accepted)))
 
 # Collect posterior samples.
-nuts_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy())
+nuts_samples = dict(alpha=amplitudes.numpy(), rho=length_scales.numpy(), sigma=np.sqrt(v.numpy()))
 
 
-# In[9]:
+# In[42]:
 
 
 # Plot posterior for HMC
 gp_plot_util.make_plots(hmc_samples, suffix="HMC",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
-# In[10]:
+# In[43]:
 
 
 # Plot posterior for NUTS
 gp_plot_util.make_plots(nuts_samples, suffix="NUTS",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
 # ## ADVI
 
-# In[11]:
+# In[47]:
 
 
 # Variational distribution, which approximates the true posterior.
@@ -219,10 +223,14 @@ qamp_rho = tf.Variable(tf.random.normal([], dtype=dtype) - 1, name='qamp_rho')
 qlength_loc = tf.Variable(tf.random.normal([], dtype=dtype), name='qlength_loc')
 qlength_rho = tf.Variable(tf.random.normal([], dtype=dtype), name='qlength_rho')
 
+qv_loc = tf.Variable(tf.random.normal([], dtype=dtype), name='qv_loc')
+qv_rho = tf.Variable(tf.random.normal([], dtype=dtype), name='qv_rho')
+
 # Create variational distribution.
 surrogate_posterior = tfd.JointDistributionNamed(dict(
     amplitude=tfd.LogNormal(qamp_loc, tf.nn.softplus(qamp_rho)),
-    length_scale=tfd.LogNormal(qlength_loc, tf.nn.softplus(qlength_rho))
+    length_scale=tfd.LogNormal(qlength_loc, tf.nn.softplus(qlength_rho)),
+    v=tfd.LogNormal(qv_loc, tf.nn.softplus(qv_rho)),
 ))
 
 # Function for running ADVI.
@@ -236,14 +244,14 @@ def run_advi(sample_size, num_steps):
         num_steps=num_steps)  # Number of iterations to run optimizer. 
 
 
-# In[12]:
+# In[48]:
 
 
 # Fit GP via ADVI.
 get_ipython().run_line_magic('time', 'losses = run_advi(sample_size=1, num_steps=2000)')
 
 
-# In[13]:
+# In[49]:
 
 
 # Plot loss.
@@ -254,16 +262,17 @@ plt.xlabel('Iteration');
 # Extract posterior samples from variational distributions.
 advi_samples = surrogate_posterior.sample(1000)
 advi_samples = dict(alpha=advi_samples['amplitude'].numpy(),
-                    rho=advi_samples['length_scale'].numpy())
+                    rho=advi_samples['length_scale'].numpy(),
+                    sigma=np.sqrt(advi_samples['v'].numpy()))
 
 
-# In[14]:
+# In[50]:
 
 
 # Plot posterior for ADVI.
 gp_plot_util.make_plots(advi_samples, suffix="ADVI",
-                        x=np.array(simdata['x']), y=np.array(simdata['f']),
-                        x_true=simdata['x_true'], f_true=simdata['f_true'])
+                        x=np.array(simdata['x']), y=np.array(simdata['y']),
+                        x_grid=simdata['x_grid'], f=simdata['f'], sigma_true=simdata['sigma'])
 
 
 # In[ ]:
