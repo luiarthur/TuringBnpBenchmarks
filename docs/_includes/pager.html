@@ -1,0 +1,34 @@
+{% assign prev_page = nil %}
+{% assign next_page = nil %}
+
+{% for post in site.posts %}
+    {% if post.url == page.url %}
+        <!-- Assign next page if not last page. -->
+        {% if forloop.first == false %}
+            {% assign i = forloop.index0 | minus:1 %}
+            {% assign next_page = site.posts[i] %}
+        {% endif %}
+
+        <!-- Assign previous page if not first page. -->
+        {% if forloop.last == false %}
+            {% assign i = forloop.index0 | plus:1 %}
+            {% assign prev_page = site.posts[i] %}
+        {% endif %}
+        
+        {% break %}
+    {% endif %}
+{% endfor %}
+
+<ul class="pager">
+    {% if prev_page %}
+    <li class="previous">
+        <a href="{{ prev_page.url | prepend: site.baseurl | replace: '//', '/' }}" data-toggle="tooltip" data-placement="top" title="{{prev_page.title}}">&larr; Previous Post</a>
+    </li>
+    {% endif %}
+
+    {% if next_page %}
+    <li class="next">
+        <a href="{{ next_page.url | prepend: site.baseurl | replace: '//', '/' }}" data-toggle="tooltip" data-placement="top" title="{{next_page.title}}">Next Post &rarr;</a>
+    </li>
+    {% endif %}
+</ul>
