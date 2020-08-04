@@ -16,8 +16,8 @@ def gp_predict_maker(y, x, x_new, cov_fn):
     
     # Function which takes parameters of covariance function
     # and predicts at new locations.
-    def gp_predict(rho, alpha, eps):
-        K = cov_fn(D, rho, alpha) + np.eye(M) * eps
+    def gp_predict(rho, alpha, sigma):
+        K = cov_fn(D, rho, alpha) + np.eye(M) * np.power(sigma, 2)
         K_new_old = K[:N_new, N_new:]
         K_old_inv = np.linalg.inv(K[N_new:, N_new:])
         C = K_new_old.dot(K_old_inv)
@@ -38,7 +38,7 @@ def plot_post(samples, key, bins=None, suffix=""):
     plt.title("{} {}".format(key, suffix));
     
 # Function for making all plots.
-def make_plots(samples, x, y, x_true, f_true, cov_fn=sqexp_cov_fn,
+def make_plots(samples, x, y, x_grid, f, sigma_true, cov_fn=sqexp_cov_fn,
                n_new=100, figsize=(12,4), figsize_f=(12, 4), suffix="",
                x_min=-3.5, x_max=3.5, ci=95, eps=1e-3):
     # Create new locations for prediction.
@@ -55,15 +55,20 @@ def make_plots(samples, x, y, x_true, f_true, cov_fn=sqexp_cov_fn,
     # Make predictions at new locations.
     preds = np.stack([gp_predict(alpha=samples['alpha'][b],
                                  rho=samples['rho'][b],
-                                 eps=eps)
+                                 sigma=samples['sigma'][b])
                       for b in range(nsamples)])
       
     # Plot parameters posterior.
     plt.figure(figsize=figsize)
-    plt.subplot(1, 2, 1)
+    plt.subplot(1, 3, 1)
     plot_post(samples, 'alpha', bins=30, suffix=suffix)
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2)
     plot_post(samples, 'rho', bins=30, suffix=suffix)
+    plt.subplot(1, 3, 3)
+    plot_post(samples, 'sigma', bins=30, suffix=suffix)
+    plt.axvline(sigma_true, ls=":", color='red', label="truth")
+    plt.legend()
+    plt.tight_layout()
     
     # Summarize function posterior.
     ci_lower = (100 - ci) / 2
@@ -81,7 +86,8 @@ def make_plots(samples, x, y, x_true, f_true, cov_fn=sqexp_cov_fn,
     plt.scatter(x, y, c='black', zorder=3, label='data')
     plt.fill_between(x_new, preds_upper, preds_lower, alpha=.3, label='95% CI')
     plt.plot(x_new, preds.mean(0), lw=2, label="mean fn.", color="blue")
-    plt.plot(x_true, f_true, label="truth", lw=2, c='red', ls=':')
+    plt.plot(x_grid, f, label="truth", lw=2, c='red', ls=':')
     plt.title("GP Posterior Predictive with 95% CI {}".format(suffix))
-    plt.legend(); 
+    plt.legend()
+    plt.tight_layout();
 
