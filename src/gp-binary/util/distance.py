@@ -19,4 +19,7 @@ def euclidean(X, Y):
 # x = np.random.randn(20, 2)
 # y = np.random.randn(15, 2)
 # assert np.all(squared_euclidean(x, y) - slow(x, y) == 0)
-# euclidean(x, y)
+#
+# from scipy.spatial import distance_matrix
+# assert np.all(euclidean(x, y) - distance_matrix(x, y) == 0)
+# euclidean(x, y) - distance_matrix(x, y)
