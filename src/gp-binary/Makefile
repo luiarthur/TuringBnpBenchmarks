@@ -1,8 +1,9 @@
-.PHONY: data
+.PHONY: data html
 
 all: script 
 
-docs-nb-html-dir = ../../docs/_posts/nb-html
+# docs-nb-html-dir = ../../docs/_posts/nb-html
+docs-nb-html-dir = html
 
 execute-all-notebooks:
 	for fname in `ls notebooks/*.ipynb`; do \
@@ -29,7 +30,6 @@ script:
 		done
 
 html:
-	mkdir -p $(docs-nb-html-dir)
 	for fname in `ls notebooks/*.ipynb`; do \
 		jupyter-nbconvert $$fname \
 		--to=html --template=basic \
