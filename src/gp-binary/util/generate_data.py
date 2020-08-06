@@ -10,7 +10,7 @@ def plot_data(x, y):
     clabel = [colors[yi] for yi in y]
     plt.scatter(x[:, 0], x[:, 1], c=clabel)
 
-for nobs in (50, 100, 200, 300):
+for nobs in (50, 100, 200, 300, 1000):
     x, y = make_moons(n_samples=nobs, shuffle=True, noise=0.1, random_state=1)
     output = dict(x1=x[:, 0].tolist(),
                   x2=x[:, 1].tolist(),
