@@ -124,7 +124,7 @@ get_ipython().run_cell_magic('time', '', '# Fit via ADVI.\nvb_fit = sm.vb(data=d
 # In[8]:
 
 
-get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
+get_ipython().run_cell_magic('time', '', "# Fit via HMC\nhmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,\n                      seed=1, algorithm='HMC', control=dict(stepsize=0.01, int_time=1, adapt_engaged=False))")
 
 
 # In[9]:
