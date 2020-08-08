@@ -27,7 +27,7 @@ end;
 Random.seed!(0)  
 
 # Model creation.
-m = GP(y, X, sqexp_cov_fn, 0.0, 1.0, -2.0, 0.1)
+m = GP(y, X, sqexp_cov_fn, 0.0, 0.1)
 
 
 # Fit via ADVI.
