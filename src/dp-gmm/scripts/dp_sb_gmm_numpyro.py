@@ -8,7 +8,7 @@ import datetime
 print('Last updated: ', datetime.datetime.now(), '(PT)')
 
 
-# In[9]:
+# In[2]:
 
 
 import json
@@ -27,7 +27,7 @@ from numpyro.infer import MCMC, NUTS, HMC
 import numpy as onp
 
 
-# In[40]:
+# In[3]:
 
 
 # Stick break function
@@ -43,7 +43,7 @@ def stickbreak(v):
 # stickbreak(x);  # last dimension sums to 1.
 
 
-# In[41]:
+# In[4]:
 
 
 # Custom distribution: Mixture of normals.
@@ -66,7 +66,7 @@ class NormalMixture(dist.Distribution):
         return logsumexp(lp, axis=axis)
 
 
-# In[42]:
+# In[5]:
 
 
 # Example:
@@ -80,7 +80,7 @@ class NormalMixture(dist.Distribution):
 # print(lp_x)
 
 
-# In[43]:
+# In[6]:
 
 
 # DP SB GMM model.
@@ -119,7 +119,7 @@ def dp_sb_gmm(y, num_components):
     #     numpyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
-# In[44]:
+# In[7]:
 
 
 # Read simulated data.
@@ -128,14 +128,14 @@ with open(path_to_data) as f:
   simdata = json.load(f)
 
 
-# In[45]:
+# In[8]:
 
 
 # Convert data to torch.tensor.
 y = np.array(simdata['y'])
 
 
-# In[87]:
+# In[9]:
 
 
 # %%time
@@ -176,7 +176,7 @@ y = np.array(simdata['y'])
 # plt.plot(loss);
 
 
-# In[91]:
+# In[10]:
 
 
 def get_posterior_samples(mcmc):
@@ -189,19 +189,19 @@ def get_posterior_samples(mcmc):
     return posterior_samples
 
 
-# In[92]:
+# In[14]:
 
 
-get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1) \n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1,\n             adapt_step_size=False, adapt_mass_matrix=False) \n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
 
 
-# In[93]:
+# In[15]:
 
 
 get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\nnuts = MCMC(kernel, num_samples=500, num_warmup=500)\nnuts.run(rng_key, y, 10)\n\nnuts_samples = get_posterior_samples(nuts)')
 
 
-# In[94]:
+# In[16]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -224,7 +224,7 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[95]:
+# In[17]:
 
 
 def plot_all_params(samples):
@@ -241,13 +241,13 @@ def plot_all_params(samples):
     plt.title("Posterior distribution of alpha");
 
 
-# In[96]:
+# In[18]:
 
 
 plot_all_params(hmc_samples)
 
 
-# In[97]:
+# In[19]:
 
 
 plot_all_params(nuts_samples)

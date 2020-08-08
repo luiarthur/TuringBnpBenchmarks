@@ -89,8 +89,8 @@ def get_dp_sb_gmm_pyro_times(path):
                 hmc_compile=0,
                 nuts_compile=0,
                 advi_run=t[0],
-                hmc_run=t[1],
-                nuts_run=t[2])
+                hmc_run=t[2],
+                nuts_run=t[4])
 
 def get_dp_sb_gmm_numpyro_times(path):
     nb_content = read_file(path)

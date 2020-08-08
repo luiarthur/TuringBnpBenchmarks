@@ -102,7 +102,6 @@ with open(path_to_data) as f:
     
 # Create data dictionary.
 data = dict(y=simdata['y'], K=10, N=len(simdata['y']),
-            # alpha_shape=1, alpha_rate=10, sigma_shape=20, sigma_rate=100)  # this works, but seems coerced
             alpha_shape=1, alpha_rate=10, sigma_shape=1, sigma_rate=10)
 
 
@@ -200,7 +199,7 @@ niters = burn + nsamples
 # In[11]:
 
 
-get_ipython().run_cell_magic('time', '', "# Sample from posterior via HMC: 34s\n# NOTE: num_leapfrog = int_time / stepsize.\nhmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n                  algorithm='HMC', control=dict(stepsize=0.01, int_time=1))")
+get_ipython().run_cell_magic('time', '', "# Sample from posterior via HMC: 34s\n# NOTE: num_leapfrog = int_time / stepsize.\nhmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1, seed=1,\n                  algorithm='HMC', control=dict(stepsize=0.01, int_time=1, adapt_engaged=False))")
 
 
 # In[12]:

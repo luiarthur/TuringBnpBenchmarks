@@ -315,6 +315,8 @@ bijectors = [
 ]
 
 
+# ## HMC
+
 # In[16]:
 
 
@@ -326,17 +328,13 @@ def hmc_sample(num_results, num_burnin_steps, current_state, step_size=0.01, num
         num_results=num_results,
         num_burnin_steps=num_burnin_steps,
         current_state=current_state,
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(
-            tfp.mcmc.TransformedTransitionKernel(
-                inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
-                    target_log_prob_fn=target_log_prob_fn,
-                    step_size=step_size, num_leapfrog_steps=num_leapfrog_steps, seed=1),
-                bijector=bijectors),
-            num_adaptation_steps=num_burnin_steps),
-        trace_fn = lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
+        kernel = tfp.mcmc.TransformedTransitionKernel(
+                     inner_kernel=tfp.mcmc.HamiltonianMonteCarlo(
+                         target_log_prob_fn=target_log_prob_fn,
+                         step_size=step_size, num_leapfrog_steps=num_leapfrog_steps, seed=1),
+            bijector=bijectors),
+        trace_fn = lambda _, pkr: pkr.inner_results.is_accepted)
 
-
-# ## HMC
 
 # In[17]:
 

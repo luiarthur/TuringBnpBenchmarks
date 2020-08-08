@@ -4,8 +4,7 @@
 # In[1]:
 
 
-import datetime
-print('Last updated: ', datetime.datetime.now(), '(PT)')
+get_ipython().system('echo "Last updated: `date`"')
 
 
 # In[2]:
@@ -28,7 +27,7 @@ from torch.nn.functional import pad
 from tqdm import trange
 
 # For ADVI
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, JitTraceEnum_ELBO, JitTrace_ELBO
 from pyro.contrib.autoguide import AutoDiagonalNormal
 from pyro.optim import Adam
 
@@ -110,11 +109,11 @@ def dp_sb_gmm(y, num_components):
         sigma = pyro.sample('sigma', dist.Gamma(1, 10))
 
     with pyro.plate('data', N):
-        # For marginalized version.
-        # pyro.sample('obs', GMM(mu[None, :], sigma[None, :], eta[None, :]), obs=y[:, None])
-        # Local variables.
+            # Local variables.
         label = pyro.sample('label', dist.Categorical(eta), infer={"enumerate": "parallel"})
         pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
+        # For marginalized version.
+        # pyro.sample('obs', GMM(mu[None, :], sigma[None, :], eta[None, :]), obs=y[:, None])
 
 
 # In[6]:
@@ -123,7 +122,7 @@ def dp_sb_gmm(y, num_components):
 # Read simulated data.
 path_to_data = '../../data/sim-data/gmm-data-n200.json'
 with open(path_to_data) as f:
-  simdata = json.load(f)
+    simdata = json.load(f)
 
 
 # In[7]:
@@ -136,7 +135,7 @@ y = torch.tensor(simdata['y'])
 # In[8]:
 
 
-get_ipython().run_cell_magic('time', '', "\n# See: https://pyro.ai/examples/dirichlet_process_mixture.html\n\npyro.clear_param_store()\n\n# Automatically define variational distribution.\nguide = AutoDiagonalNormal(\n    pyro.poutine.block(dp_sb_gmm, expose=['alpha', 'v', 'mu', 'sigma'])\n)  # a mean field guide\n\nsvi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), TraceEnum_ELBO())\n\n# pyro.set_rng_seed(4)\npyro.set_rng_seed(7)\n\n# do gradient steps\nloss = []\nfor step in trange(2000):\n    _loss = svi.step(y, 10)\n    loss.append(_loss)\n    \n# Plot ELBO    \nplt.plot(loss);")
+get_ipython().run_cell_magic('time', '', "\n# See: https://pyro.ai/examples/dirichlet_process_mixture.html\n\npyro.clear_param_store()\n\n# Automatically define variational distribution.\nguide = AutoDiagonalNormal(\n    pyro.poutine.block(dp_sb_gmm, expose=['alpha', 'v', 'mu', 'sigma'])\n)  # a mean field guide\n\nelbo = TraceEnum_ELBO()\nsvi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), elbo)\n\n# pyro.set_rng_seed(4)\npyro.set_rng_seed(7)\n\n# do gradient steps\nloss = []\nfor step in trange(2000):\n    _loss = svi.step(y, 10)\n    loss.append(_loss)\n    \n# Plot ELBO    \nplt.plot(loss);")
 
 
 # In[9]:
@@ -173,7 +172,7 @@ plt.xlabel('alpha')
 plt.ylabel('density');
 
 
-# In[10]:
+# In[11]:
 
 
 pyro.clear_param_store()
@@ -182,9 +181,8 @@ pyro.clear_param_store()
 pyro.set_rng_seed(1)
 
 # Set up HMC sampler.
-kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1, target_accept_prob=0.8,
-             adapt_step_size=False, adapt_mass_matrix=False)
-# kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1, target_accept_prob=0.8)
+kernel = HMC(dp_sb_gmm, step_size=0.01, trajectory_length=1, 
+             adapt_step_size=False, adapt_mass_matrix=False, jit_compile=True)
 hmc = MCMC(kernel, num_samples=500, warmup_steps=500)
 hmc.run(y, 10)
 
@@ -195,7 +193,7 @@ hmc_posterior_samples = hmc.get_samples()
 hmc_posterior_samples['eta'] = stickbreak(hmc_posterior_samples['v'])
 
 
-# In[11]:
+# In[12]:
 
 
 pyro.clear_param_store()
@@ -204,7 +202,7 @@ pyro.clear_param_store()
 pyro.set_rng_seed(1)
 
 # Set up NUTS sampler.
-kernel = NUTS(dp_sb_gmm, target_accept_prob=0.8)
+kernel = NUTS(dp_sb_gmm, target_accept_prob=0.8, jit_compile=True)
 nuts = MCMC(kernel, num_samples=500, warmup_steps=500)
 nuts.run(y, 10)
 
@@ -215,7 +213,7 @@ nuts_posterior_samples = nuts.get_samples()
 nuts_posterior_samples['eta'] = stickbreak(nuts_posterior_samples['v'])
 
 
-# In[12]:
+# In[13]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -238,7 +236,7 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[13]:
+# In[14]:
 
 
 def plot_all_params(params):
@@ -254,14 +252,20 @@ def plot_all_params(params):
     plt.title("Posterior distribution of alpha");
 
 
-# In[14]:
+# In[15]:
 
 
 plot_all_params(hmc_posterior_samples)
 
 
-# In[15]:
+# In[16]:
 
 
 plot_all_params(nuts_posterior_samples)
+
+
+# In[ ]:
+
+
+
 
