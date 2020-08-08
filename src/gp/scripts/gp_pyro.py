@@ -86,7 +86,7 @@ def make_gp_model(X, y,
 # In[5]:
 
 
-get_ipython().run_cell_magic('time', '', "\n### HMC ###\npyro.clear_param_store()\n\n# Set random seed for reproducibility.\npyro.set_rng_seed(1)\n\n# Make GP model for HMC\nhmc_gpr = make_gp_model(X, y)\n\n# Set up HMC sampler.\nkernel = HMC(hmc_gpr.model, step_size=0.01, trajectory_length=1, target_accept_prob=0.8,\n             adapt_step_size=False, adapt_mass_matrix=False)\nhmc = MCMC(kernel, num_samples=1000, warmup_steps=1000)\nhmc.run()\n\n# Get posterior samples\nhmc_posterior_samples = hmc.get_samples()\nhmc_posterior_samples = dict(rho=hmc_posterior_samples['kernel.lengthscale'].numpy(),\n                             alpha=hmc_posterior_samples['kernel.variance'].sqrt().numpy(),\n                             sigma=hmc_posterior_samples['noise'].sqrt().numpy())")
+get_ipython().run_cell_magic('time', '', "\n### HMC ###\npyro.clear_param_store()\n\n# Set random seed for reproducibility.\npyro.set_rng_seed(1)\n\n# Make GP model for HMC\nhmc_gpr = make_gp_model(X, y)\n\n# Set up HMC sampler.\n# kernel = HMC(hmc_gpr.model, step_size=0.01, trajectory_length=1,\n#              adapt_step_size=True, adapt_mass_matrix=True)  # 14s\nkernel = HMC(hmc_gpr.model, step_size=0.01, trajectory_length=1,\n             adapt_step_size=False, adapt_mass_matrix=False)\nhmc = MCMC(kernel, num_samples=1000, warmup_steps=1000)\nhmc.run()\n\n# Get posterior samples\nhmc_posterior_samples = hmc.get_samples()\nhmc_posterior_samples = dict(rho=hmc_posterior_samples['kernel.lengthscale'].numpy(),\n                             alpha=hmc_posterior_samples['kernel.variance'].sqrt().numpy(),\n                             sigma=hmc_posterior_samples['noise'].sqrt().numpy())")
 
 
 # In[6]:
