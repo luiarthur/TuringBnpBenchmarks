@@ -81,8 +81,8 @@ def get_pyro_gp_times(path):
                 hmc_compile=0,
                 nuts_compile=0,
                 advi_run=np.nan,
-                hmc_run=t[0],
-                nuts_run=t[1])
+                hmc_run=t[1],
+                nuts_run=t[3])
 
 def get_numpyro_gp_times(path):
     nb_content = read_file(path)
