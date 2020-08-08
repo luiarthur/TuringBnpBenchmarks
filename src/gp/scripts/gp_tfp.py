@@ -117,15 +117,13 @@ def run_hmc(num_results, num_burnin_steps):
           num_results=num_results,
           num_burnin_steps=num_burnin_steps,
           current_state=initial_state,
-          kernel=tfp.mcmc.SimpleStepSizeAdaptation(
-              tfp.mcmc.TransformedTransitionKernel(
-                  inner_kernel = tfp.mcmc.HamiltonianMonteCarlo(
-                      target_log_prob_fn=unnormalized_log_posterior,
-                      step_size=0.01,
-                      num_leapfrog_steps=100),
-                  bijector=bijectors),
-          num_adaptation_steps=num_burnin_steps),
-          trace_fn=lambda _, pkr: pkr.inner_results.inner_results.is_accepted)
+          kernel=tfp.mcmc.TransformedTransitionKernel(
+                     inner_kernel = tfp.mcmc.HamiltonianMonteCarlo(
+                         target_log_prob_fn=unnormalized_log_posterior,
+                         step_size=0.01,
+                         num_leapfrog_steps=100),
+                     bijector=bijectors),
+          trace_fn=lambda _, pkr: pkr.inner_results.is_accepted)
 
 
 # In[6]:

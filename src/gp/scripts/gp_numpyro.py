@@ -73,7 +73,7 @@ plt.legend();
 # In[5]:
 
 
-get_ipython().run_cell_magic('time', '', "\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(GP, step_size=.01, trajectory_length=1) \n\nhmc = MCMC(kernel, num_samples=1000, num_warmup=1000)\nhmc.run(rng_key, X, y)\n\nhmc_samples = hmc.get_samples()\nhmc_samples = dict(alpha=np.sqrt(hmc_samples['kernel_var']), rho=hmc_samples['kernel_length'],\n                   sigma=hmc_samples['sigma'])")
+get_ipython().run_cell_magic('time', '', "\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(GP, step_size=.01, trajectory_length=1,\n             adapt_step_size=False, adapt_mass_matrix=False)\n\nhmc = MCMC(kernel, num_samples=1000, num_warmup=1000)\nhmc.run(rng_key, X, y)\n\nhmc_samples = hmc.get_samples()\nhmc_samples = dict(alpha=np.sqrt(hmc_samples['kernel_var']), rho=hmc_samples['kernel_length'],\n                   sigma=hmc_samples['sigma'])")
 
 
 # In[6]:
