@@ -70,7 +70,8 @@ vb_samples = pystan_vb_extract(vb_fit)
 # Fit via HMC
 hmc_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,
                       seed=1, algorithm='HMC',
-                      control=dict(stepsize=0.01, int_time=1))
+                      control=dict(stepsize=0.01, int_time=1,
+                                   adapt_engaged=False))
 
 # Fit via NUTS
 nuts_fit = sm.sampling(data=data, iter=2000, chains=1, warmup=1000, thin=1,
