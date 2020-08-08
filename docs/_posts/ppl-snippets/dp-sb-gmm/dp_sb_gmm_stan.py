@@ -87,9 +87,10 @@ niters = burn + nsamples  # Number of MCMC (HMC / NUTS) iterations in total
 
 # Sample from posterior via HMC
 # NOTE: num_leapfrog = int_time / stepsize.
-hmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1,
-                      seed=1, algorithm='HMC',
-                      control=dict(stepsize=0.01, int_time=1))
+hmc_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn,
+                      thin=1, seed=1, algorithm='HMC',
+                      control=dict(stepsize=0.01, int_time=1,
+                                   adapt_engaged=False))
 
 # Sample from posterior via NUTS
 nuts_fit = sm.sampling(data=data, iter=niters, chains=1, warmup=burn, thin=1,
