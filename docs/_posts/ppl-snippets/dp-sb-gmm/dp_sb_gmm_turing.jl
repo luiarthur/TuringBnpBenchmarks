@@ -8,15 +8,11 @@
     sig ~ filldist(Gamma(1, 1/10), K)  # mean = 0.1
 
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
-    v ~ filldist(Beta(1, alpha), K - 1)
-    eta = stickbreak(v)  # named w in the blog post.
-    # NOTE: `stickbreak` is currently only on the master branch of Turing.jl,
-    # but should be included in the next Turing release.
+    crm = DirichletProcess(alpha)
+    v ~ filldist(StickBreakingProcess(crm), K - 1)
+    eta = stickbreak(v)
 
-    log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
-    Turing.acclogp!(_varinfo, sum(log_target))
-    # NOTE: `_varinfo` is a Turing variable that stores model information,
-    # including log joint density.
+    y .~ UnivariateGMM(mu, sig, Categorical(eta))
 end
 
 # NOTE: Read data y here ...
