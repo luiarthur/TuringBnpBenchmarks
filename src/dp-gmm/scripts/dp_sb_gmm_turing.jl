@@ -7,7 +7,7 @@ import Pkg; Pkg.activate("../../../")
 # Import Libraries
 using Turing
 using Turing: Variational
-using Turing.RandomMeasures: stickbreak
+using Turing.RandomMeasures: stickbreak, DirichletProcess, StickBreakingProcess
 using Distributions
 using JSON3
 using PyPlot
@@ -24,16 +24,12 @@ using Flux
     sig ~ filldist(Gamma(1, 1/10), K)  # mean = 0.1
 
     alpha ~ Gamma(1, 1/10)  # mean = 0.1
-    v ~ filldist(Beta(1, alpha), K - 1)
+    crm = DirichletProcess(alpha)
+    v ~ filldist(StickBreakingProcess(crm), K - 1)
     eta = stickbreak(v)
 
-    # NOTE: Slow. And the MCMC gets stuck?
-    # y .~ MixtureModel(Normal.(mu, sig), eta)
-
-    # NOTE: Fast, and seems to mix well.
-    log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
-    Turing.acclogp!(_varinfo, sum(log_target))
-end
+    y .~ UnivariateGMM(mu, sig, Categorical(eta))
+end;
 
 # Directory where all simulation data are stored.
 data_dir = joinpath(@__DIR__, "../../data/sim-data")

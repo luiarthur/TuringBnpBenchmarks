@@ -27,8 +27,8 @@ using Flux
     v ~ filldist(StickBreakingProcess(crm), K - 1)
     eta = stickbreak(v)
 
-    # NOTE: Slow. And the MCMC gets stuck?
-    y .~ MixtureModel(Normal.(mu, sig), eta)
+    log_target = logsumexp(normlogpdf.(mu', sig', y) .+ log.(eta)', dims=2)
+    Turing.acclogp!(_varinfo, sum(log_target))
 end;
 
 # Directory where all simulation data are stored.
@@ -63,10 +63,6 @@ m = dp_gmm_sb(y, 10)
 q0 = Variational.meanfield(m)  # initialize variational distribution (optional)
 advi = ADVI(1, 2000)  # num_elbo_samples, max_iters
 @time q = vi(m, advi, q0, optimizer=Flux.ADAM(1e-2));
-
-# NOTE: I can't get the other optimizers to work. 
-# So the timings may be overestimated.
-# @time q = vi(m, advi, optimizer=RMSProp());  # a little slower, inference not as good.
 
 # Function for generating samples from approximate posterior
 nsamples = 1000
