@@ -8,7 +8,6 @@ using Turing
 using Turing: Variational
 using Distributions
 using Distances
-using AbstractGPs, KernelFunctions
 using PyPlot
 using StatsFuns
 import Random
@@ -31,22 +30,29 @@ function make_extractor(m, q, nsamples=1000)
 end
 ;
 
-# Define a kernel.
-sqexpkernel(alpha::Real, rho::Real) = alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
+# Squared-exponential covariance function
+function sqexp_cov_fn(D, alpha, rho; d_is_squared=false)
+    if d_is_squared
+        return alpha ^ 2 * exp.(-0.5 * D/(rho^2))
+    else
+        return alpha ^ 2 * exp.(-0.5 * (D/rho) .^ 2)
+    end
+end
 
-@model function GPRegression(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0,
-                             s_rho=1.0, m_sigma=0.0, s_sigma=1.0)
+@model function GP(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0, s_rho=1.0, m_sigma=0.0, s_sigma=1.0)
+    # Distance matrix.
+    D2 = pairwise(Distances.SqEuclidean(), X, dims=1)
+    
     # Priors.
     alpha ~ LogNormal(m_alpha, s_alpha)
     rho ~ LogNormal(m_rho, s_rho)
     sigma ~ LogNormal(m_sigma, s_sigma)
     
     # Realized covariance function
-    kernel = sqexpkernel(alpha, rho)
-    K = kernelmatrix(kernel, X, obsdim=1)
+    K = sqexp_cov_fn(D2, alpha, rho, d_is_squared=true)
     
     # Sampling Distribution.
-    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K + σ²I.
+    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K.
 end;
 
 # Read data.
@@ -84,10 +90,10 @@ m = begin
     s_rho = 1.0
     m_sigma = 0.0
     s_sigma = 1.0
-    GPRegression(y, X, m_alpha, s_alpha, m_rho, s_rho, m_sigma, s_sigma)
+    GP(y, X, m_alpha, s_alpha, m_rho, s_rho, m_sigma, s_sigma)
 end;
 
-# Fit via ADVI.
+# Fit via ADVI. You can also use HMC.
 Random.seed!(0)
 
 # initialize variational distribution (optional)
@@ -129,7 +135,7 @@ hmc_samples = Dict(:alpha => alpha, :rho => rho, :sigma => sigma);
 Random.seed!(7)
 
 # Compile
-@time _ = sample(m, NUTS(10, 0.8), 20);
+@time _ = sample(m, NUTS(4, 0.8), 9);
 
 # Run
 @time chain = begin
@@ -146,6 +152,27 @@ alpha = vec(group(chain, :alpha).value.data[:, :, 1]);
 rho = vec(group(chain, :rho).value.data[:, :, 1]);
 sigma = vec(group(chain, :sigma).value.data[:, :, 1]);
 nuts_samples = Dict(:alpha => alpha, :rho => rho, :sigma => sigma);
+
+# This funciton returns a function for predicting at new points given parameter values.
+function make_gp_predict_fn(Xnew, y, X)
+    N = size(X, 1)
+    M = size(Xnew, 1)
+    Q = N + M
+    Z = [Xnew; X]
+    D2 = pairwise(SqEuclidean(), Z, dims=1)
+    
+    return (alpha, rho, sigma) -> let
+        K = sqexp_cov_fn(D2, alpha, rho, d_is_squared=true) + LinearAlgebra.I * sigma^2
+        Koo_inv = inv(K[(M+1):end, (M+1):end])
+        Knn = K[1:M, 1:M]
+        Kno = K[1:M, (M+1):end]
+        C = Kno * Koo_inv
+        m = C * y
+        S = Matrix(LinearAlgebra.Hermitian(Knn - C * Kno'))
+        mvn = MvNormal(m, S)
+        rand(mvn)
+    end
+end
 
 # Function for plotting parameter posterior.
 function plot_post(samples, name; bins=nothing, suffix="")
@@ -179,15 +206,10 @@ function plot_fn_posterior(samples; figsize=(12, 4), figsize_f=figsize, suffix="
     plt.tight_layout()
     
     # Make predictions at new locations.
-    # Uses AbstractGPs: GP, posterior.
     X_new = reshape(collect(range(-3.5, 3.5, length=100)), 100, 1)
-    ynew = [let
-        kernel = ModifiedSqExpKernel(alpha[i], rho[i])
-        kernel += 1e-12 * EyeKernel()  # for numerical stability.
-        f = GP(kernel)
-        pfx = posterior(f(X[:,1], sigma[i]^2), y)
-        rand(pfx(X_new[:,1])) + randn(length(X_new)) * sigma[i]
-    end for i in 1:nsamps];
+    gp_predict = make_gp_predict_fn(X_new, y, X)
+    
+    ynew = [gp_predict(alpha[m], rho[m], sigma[m]) for m in 1:nsamps]
     ynew = hcat(ynew...)
     
     # Summary statistics of posterior function.
