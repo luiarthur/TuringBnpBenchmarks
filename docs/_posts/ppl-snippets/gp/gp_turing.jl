@@ -1,26 +1,31 @@
-# NOTE: Import libraries ...
+# Import libraries.
+using Turing, Turing: Variational
+using Distributions
+using AbstractGPs, KernelFunctions
+import Random
+import LinearAlgebra
+
+# NOTE: Import other libraries ...
 
 # NOTE: Read data ...
 
-# Squared-exponential covariance function.
-sqexp_cov_fn(Dsq, alpha, rho) = alpha^2 * exp.(-Dsq/(2 * rho^2))
+# Define a kernel.
+sqexpkernel(alpha::Real, rho::Real) = 
+    alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
 
-# Define GP model.
-@model function GP(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0, s_rho=1.0,
-                   m_sigma=0.0, s_sigma=1.0)
-    # Squared distance matrix.
-    Dsq = pairwise(Distances.SqEuclidean(), X, dims=1)
-    
+@model function GPRegression(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0,
+                             s_rho=1.0, m_sigma=0.0, s_sigma=1.0)
     # Priors.
     alpha ~ LogNormal(m_alpha, s_alpha)
     rho ~ LogNormal(m_rho, s_rho)
     sigma ~ LogNormal(m_sigma, s_sigma)
     
     # Realized covariance function
-    K = sqexp_cov_fn(Dsq, alpha, rho)
+    kernel = sqexpkernel(alpha, rho)
+    K = kernelmatrix(kernel, X, obsdim=1)
     
     # Sampling Distribution.
-    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K.
+    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K + σ²I.
 end;
 
 # Set random number generator seed.
