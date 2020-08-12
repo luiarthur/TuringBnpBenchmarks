@@ -10,7 +10,7 @@ using .Kernels
 import LinearAlgebra
 import LinearAlgebra: cholesky, Symmetric
 
-export metric, SqExpKernel, GP, posterior, Kernels
+export GP, posterior, Kernels
 
 struct GP
   mu
@@ -23,7 +23,7 @@ struct GP
   a
 end
 
-function GP(y, X, kernel, mu=0, sigma=0)
+function GP(y, X, kernel; mu=0, sigma=0)
   Ddata = pairwise(metric(kernel), X, dims=1)
   Kdata = kernel(Ddata)
   C = cholesky(Symmetric(Kdata))
@@ -42,7 +42,17 @@ function posterior(gp, Xnew)
   mu = gp.mu .+ K_new_data * gp.a
   S = Knew - K_new_data * (gp.C \ K_new_data')
 
-  return MvNormal(mu, Symmetric(S))
+  return MvNormal(mu, Symmetric(S) + LinearAlgebra.I * gp.sigma)
+end
+
+quantiles(X, q; dims) = mapslices(v -> quantile(v, q), X, dims=dims)
+
+function ci(preds, alpha=0.05, dims=2)
+    q_upper = 1 - alpha / 2
+    q_lower = alpha / 2
+    lower = vec(quantiles(preds, q_lower, dims=dims))
+    upper = vec(quantiles(preds, q_upper, dims=dims))
+    return lower, upper
 end
 
 end

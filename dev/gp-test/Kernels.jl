@@ -17,7 +17,7 @@ SqExpKernel(alpha::Real, rho::Real) = SqExpKernel(alpha, rho, 1e-8)
 metric(k::SqExpKernel) = SqEuclidean()
 
 function (k::SqExpKernel)(Dsq::AbstractMatrix; jitter=true)
-  out = k.alpha^2 * exp.(-Dsq / (2*k.rho^2))
+  out = k.alpha^2 * exp.(-Dsq / (2 * k.rho^2))
   if jitter
     out += LinearAlgebra.I * k.eps
   end
