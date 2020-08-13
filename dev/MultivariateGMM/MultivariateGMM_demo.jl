@@ -2,6 +2,7 @@ using Distributions
 using Turing
 using PyPlot
 import LinearAlgebra
+import Random
 
 eye(n::Int) = Matrix{Float64}(LinearAlgebra.I, n, n)
 
@@ -24,7 +25,9 @@ eye(n::Int) = Matrix{Float64}(LinearAlgebra.I, n, n)
 end
 
 # Genreate data.
-Y = [randn(50, 2) .+ 3; randn(30, 2) .- 3]
+Random.seed!(0)
+Y = [rand(MvNormal([-3, -3], [[1., 0.8] [0.8, 1.]]), 50)';
+     rand(MvNormal([3, 3], [[1., -0.7] [-0.7, 1.]]), 30)']
 
 # Fit model.
 K = 5
