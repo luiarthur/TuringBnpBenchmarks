@@ -3,6 +3,7 @@ using Turing
 using PyPlot
 import LinearAlgebra
 import Random
+using StatsFuns
 
 eye(n::Int) = Matrix{Float64}(LinearAlgebra.I, n, n)
 
@@ -61,3 +62,22 @@ plt.boxplot(w);
 # Plot log unnormalized joint density.
 plt.plot(get(chain, :log_density)[1].data[:, 1])
 plt.title("Trace of log prob");
+
+# Predict cluster membership at new location.
+function predict(x::AbstractVector, mu, Sigma, w)
+  K = length(w)
+  ll = [logpdf(MvNormal(mu[k, :], Sigma[:, :, k]), x) for k in 1:K]
+  logp = ll + log.(w)
+  return exp.(logp .- logsumexp(logp))
+end
+
+function postpredict(x::AbstractVector, mus, Sigmas, ws)
+  nsamps = size(ws, 1)
+  out = mean([predict(x, mus[i, :, :], Sigmas[i, :, :, :], ws[i, :, :])
+              for i in 1:nsamps])
+  return vec(out)
+end
+
+# TODO: make regularly-sized grid.
+xgrid = [rand(Uniform(-3, 3), 2) for _ in 1:100]
+@time pp = hcat([postpredict(x, mu, Sigma, w) for x in xgrid]...);
