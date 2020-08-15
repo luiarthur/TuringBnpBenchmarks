@@ -3,7 +3,7 @@ layout: page
 title: "Gaussian Process Classification Model in various PPLs"
 subtitle: GPC in PPLs
 math: on
-nburl: "https://github.com/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-binary/notebooks/"
+nburl: "https://github.com/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-classify/notebooks/"
 ppls: "Turing,STAN,TFP,Pyro,Numpyro"
 sorttable: on
 date_last_modified: "4 August, 2020."

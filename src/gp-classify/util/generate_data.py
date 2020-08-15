@@ -15,7 +15,7 @@ for nobs in (50, 100, 200, 300, 1000):
     output = dict(x1=x[:, 0].tolist(),
                   x2=x[:, 1].tolist(),
                   y=y.tolist())
-    save_path = '../data/gp-binary-data-N{}.json'.format(nobs)
+    save_path = '../data/gp-classify-data-N{}.json'.format(nobs)
     with open(save_path, 'w') as outfile:
         json.dump(output, outfile)
 
