@@ -1,5 +1,10 @@
-# https://gregorygundersen.com/blog/2019/09/12/practical-gp-regression/
 module GPs
+
+# https://gregorygundersen.com/blog/2019/09/12/practical-gp-regression/
+# NOTE: If A * x = b. Then A \ b solves for x. 
+# NOTE: cholesky(A) \ b = L' \ (L \ b) = x, where L = cholesky(A).L
+# NOTE: A \ b and cholesky(A) \ b are respectively implemented via variants of
+# `solve` and `cholesky solve` in other languages.
 
 using Distributions
 using Distances
@@ -28,7 +33,7 @@ function GP(y, X, kernel; mu=0, sigma=0)
   Kdata = kernel(Ddata)
   C = cholesky(Symmetric(Kdata))
   d = y .- mu
-  a = C \ d  # = L' \ (L \ d), where L = cholesky(Kdata).
+  a = C \ d  # = L' \ (L \ d), where L = cholesky(Kdata).L
   return GP(mu, kernel, y, X, sigma, C, d, a)
 end
 
