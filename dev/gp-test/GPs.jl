@@ -28,7 +28,7 @@ function GP(y, X, kernel; mu=0, sigma=0)
   Kdata = kernel(Ddata)
   C = cholesky(Symmetric(Kdata))
   d = y .- mu
-  a = C \ d
+  a = C \ d  # = L' \ (L \ d), where L = cholesky(Kdata).
   return GP(mu, kernel, y, X, sigma, C, d, a)
 end
 
