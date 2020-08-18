@@ -142,16 +142,27 @@ gpc_model = tfd.JointDistributionNamed(dict(
     alpha=tfd.LogNormal(dtype(0), dtype(1)),
     rho=tfd.LogNormal(dtype(0), dtype(1)),
     beta=tfd.Normal(dtype(0), dtype(1)),
-    eta=tfd.Independent(
-        tfd.Normal(np.zeros(X.shape[0], dtype=dtype), dtype(1)),
-        reinterpreted_batch_ndims=1),
+    eta=tfd.Sample(tfd.Normal(dtype(0), dtype(1)),
+                   sample_shape=X.shape[0]),
+    # NOTE: `Sample` and `Independent` resemble, respectively,
+    # `filldist` and `arraydist` in Turing.
     obs=lambda alpha, rho, beta, eta: tfd.Independent(
         tfd.Bernoulli(logits=compute_f(alpha, rho, beta, eta)),
         reinterpreted_batch_ndims=1) 
 ))
 
-# NOTE: This (equivalent) version mixes poorly.
-#
+# Check shapes are correct.
+print(gpc_model.sample()['obs'].shape)
+print(gpc_model.sample()['eta'].shape)
+print(gpc_model.sample([2])['obs'].shape)
+print(gpc_model.sample([2])['eta'].shape)
+print(gpc_model.sample([2,3])['obs'].shape)
+print(gpc_model.sample([2,3])['eta'].shape)
+
+
+# **NOTE:** This (equivalent) version mixes poorly.
+# 
+# ```python
 # gpc_model = tfd.JointDistributionNamed(dict(
 #     alpha=tfd.LogNormal(dtype(0), dtype(1)),
 #     rho=tfd.LogNormal(dtype(0), dtype(1)),
@@ -163,9 +174,12 @@ gpc_model = tfd.JointDistributionNamed(dict(
 #     obs=lambda f: tfd.Independent(
 #         tfd.Bernoulli(logits=f), reinterpreted_batch_ndims=1)
 # ))
-
-# NOTE: Alternate implementation via JointDistributionCoroutine.
-#
+# ```
+# 
+# **NOTE:** Alternate implementation via `JointDistributionCoroutine`.
+# This requires some modifications to the code below.
+# 
+# ```python
 # Root = tfd.JointDistributionCoroutine.Root
 # @tfd.JointDistributionCoroutine
 # def gpc_model():
@@ -178,17 +192,8 @@ gpc_model = tfd.JointDistributionNamed(dict(
 #     obs = yield tfd.Independent(
 #         tfd.Bernoulli(logits=compute_f(alpha, rho, beta, eta)),
 #         reinterpreted_batch_ndims=1) 
-
-# Check shapes are correct.
-print(gpc_model.sample()['obs'].shape)
-print(gpc_model.sample()['eta'].shape)
-print(gpc_model.sample([2])['obs'].shape)
-print(gpc_model.sample([2])['eta'].shape)
-print(gpc_model.sample([2,3])['obs'].shape)
-print(gpc_model.sample([2,3])['eta'].shape)
-# print(gpc_model.sample()['f'].shape)
-# print(gpc_model.sample([2,3])['f'].shape)
-
+# 
+# ```
 
 # In[6]:
 
