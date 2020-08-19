@@ -323,7 +323,7 @@ print(f"Acceptance rate: {np.mean(nuts_stats['is_accepted'])}")
 
 # Collect posterior samples.
 nuts_samples = dict(alpha=alpha.numpy(), rho=rho.numpy(),
-                   beta=beta.numpy(), eta=eta.numpy())
+                    beta=beta.numpy(), eta=eta.numpy())
 
 plt.plot(nuts_stats['target_log_prob'])
 plt.title("NUTS log target Traceplot");
@@ -345,7 +345,7 @@ plot_kernel_params(nuts_samples)
 
 # ## ADVI
 
-# In[13]:
+# In[88]:
 
 
 # Variational distribution, which approximates the true posterior.
@@ -362,7 +362,7 @@ for key in ordered_params:
                                          name=f'q{key}_rho')
     
 # Create variational distribution.
-surrogate_family = dict(alpha=tfd.LogNormal, rho=tfd.LogitNormal,
+surrogate_family = dict(alpha=tfd.LogNormal, rho=tfd.LogNormal,
                         beta=tfd.Normal, eta=tfd.Normal)
 surrogate_posterior_dict = {
     key: surrogate_family[key](vp_dict[f'q{key}_loc'], tf.nn.softplus(vp_dict[f'q{key}_rho']))
@@ -385,14 +385,14 @@ def run_advi(sample_size, num_steps):
         num_steps=num_steps)  # Number of iterations to run optimizer.
 
 
-# In[14]:
+# In[89]:
 
 
 # Fit GP via ADVI.
-get_ipython().run_line_magic('time', 'losses = run_advi(sample_size=1, num_steps=1000)')
+get_ipython().run_line_magic('time', 'losses = run_advi(sample_size=10, num_steps=1000)')
 
 
-# In[15]:
+# In[90]:
 
 
 # Plot losses
@@ -405,7 +405,7 @@ advi_samples = surrogate_posterior.sample(500)
 advi_samples = {k: advi_samples[k].numpy() for k in advi_samples}
 
 
-# In[16]:
+# In[91]:
 
 
 plot_latent_fn(advi_samples, X, y, 'ADVI')
