@@ -96,14 +96,16 @@ def get_dp_sb_gmm_numpyro_times(path):
     nb_content = read_file(path)
     r = re.findall(r'(?<=\[)\d+[:\d+]+', nb_content)
     t = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
+    print(r)
+    print(t)
     r = list(map(sanitize_hms, r))
     t = list(map(sanitize_py, t))
     return dict(model='dp_sb_gmm',
                 ppl='numpyro',
-                advi_compile=np.nan,
-                hmc_compile=t[0] - r[0],
-                nuts_compile=t[1] - r[1],
-                advi_run=np.nan,
+                advi_compile=t[0],
+                hmc_compile=t[2] - r[0],
+                nuts_compile=t[3] - r[1],
+                advi_run=t[1],
                 hmc_run=r[0],
                 nuts_run=r[1])
 
