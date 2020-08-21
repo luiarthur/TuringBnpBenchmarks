@@ -1,6 +1,22 @@
-!pip install numpyro;
+#!/usr/bin/env python
+# coding: utf-8
 
-!echo "Last updated: `date`"
+# <a href="https://colab.research.google.com/github/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-classify/notebooks/gp_classify_numpyro.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+# In[1]:
+
+
+get_ipython().system('pip install numpyro;')
+
+
+# In[1]:
+
+
+get_ipython().system('echo "Last updated: `date`"')
+
+
+# In[3]:
+
 
 import json
 import matplotlib.pyplot as plt
@@ -22,6 +38,10 @@ from sklearn.gaussian_process.kernels import WhiteKernel, RBF
 
 numpyro.enable_x64()
 
+
+# In[4]:
+
+
 def plot_data(X, y, **kwargs):
     colors = onp.array(['blue', 'red'])
     plt.scatter(X[:, 0], X[:, 1], c=colors[y], **kwargs)
@@ -37,6 +57,10 @@ def gen_grid(X, n, return_each=False, eps=0):
         return Y, x0, x1
     else:
         return Y
+
+
+# In[5]:
+
 
 def sample_posterior(guide, params, nsamples, seed=1):
     samples = guide.get_posterior(params).sample(random.PRNGKey(seed), (nsamples, ))
@@ -98,9 +122,21 @@ def plot_uq(samples, X, nnew, algo, figsize=np.array([8, 3]), grid_eps=0.5):
     # Plot kernel parameters
     plot_kernel_params(samples, algo, figsize=figsize)
 
+
+# ## Data
+
+# In[6]:
+
+
 # Make data
 X, y = make_moons(n_samples=50, shuffle=True, noise=0.1, random_state=1)
 plot_data(X, y)
+
+
+# ## Model
+
+# In[7]:
+
 
 # TODO: This is not efficient.
 def sq_exp_cov(X, alpha, rho):
@@ -129,55 +165,63 @@ def GPC(X, y):
     # Likelihood.
     numpyro.sample('obs', dist.Bernoulli(logits=f), obs=y)
 
-%%time
 
-# Set random seed for reproducibility.
-rng_key = random.PRNGKey(0)
+# ## HMC
 
-# NOTE: num_leapfrog = trajectory_length / step_size
-hmc = MCMC(HMC(GPC, step_size=.05, trajectory_length=1,
-               adapt_step_size=False, adapt_mass_matrix=False),
-           num_samples=500, num_warmup=500)
-hmc.run(rng_key, X, y)
+# In[8]:
 
-hmc_samples = hmc.get_samples()
+
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nhmc = MCMC(HMC(GPC, step_size=.05, trajectory_length=1,\n               adapt_step_size=False, adapt_mass_matrix=False),\n           num_samples=500, num_warmup=500)\nhmc.run(rng_key, X, y)\n\nhmc_samples = hmc.get_samples()')
+
+
+# In[9]:
+
 
 plot_uq(hmc_samples, X, 30, "HMC")
 
-%%time
 
-# Set random seed for reproducibility.
-rng_key = random.PRNGKey(0)
+# ## NUTS
 
-# NOTE: num_leapfrog = trajectory_length / step_size
+# In[10]:
 
-nuts = MCMC(NUTS(GPC, target_accept_prob=0.8, max_tree_depth=10),
-            num_samples=500, num_warmup=500)
-nuts.run(rng_key, X, y)
 
-nuts_samples = nuts.get_samples()
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\n\nnuts = MCMC(NUTS(GPC, target_accept_prob=0.8, max_tree_depth=10),\n            num_samples=500, num_warmup=500)\nnuts.run(rng_key, X, y)\n\nnuts_samples = nuts.get_samples()')
+
+
+# In[11]:
+
 
 plot_uq(nuts_samples, X, 30, "NUTS")
 
-%%time
 
-# Compile
-guide = AutoDiagonalNormal(GPC)
-optimizer = numpyro.optim.Adam(step_size=0.01)
-svi = SVI(GPC, guide, optimizer, loss=ELBO())
-init_state = svi.init(random.PRNGKey(1), X, y)
+# ## ADVI
+# 
+# - Learn more about [ADVI in Numpyro][1]
+# 
+# [1]: http://num.pyro.ai/en/stable/svi.html
+# 
+# 
 
-%%time
+# In[12]:
 
-# Run optimizer
-state, losses = lax.scan(lambda state, i: 
-                         svi.update(state, X, y), init_state, np.arange(1000))
 
-# Extract surrogate posterior.
-params = svi.get_params(state)
-plt.plot(losses);
-advi_samples = sample_posterior(guide, params, nsamples=500, seed=1)
+get_ipython().run_cell_magic('time', '', '\n# Compile\nguide = AutoDiagonalNormal(GPC)\noptimizer = numpyro.optim.Adam(step_size=0.01)\nsvi = SVI(GPC, guide, optimizer, loss=ELBO())\ninit_state = svi.init(random.PRNGKey(1), X, y)')
+
+
+# In[13]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Run optimizer\nstate, losses = lax.scan(lambda state, i: \n                         svi.update(state, X, y), init_state, np.arange(1000))\n\n# Extract surrogate posterior.\nparams = svi.get_params(state)\nplt.plot(losses);\nadvi_samples = sample_posterior(guide, params, nsamples=500, seed=1)')
+
+
+# In[14]:
+
 
 plot_uq(advi_samples, X, 30, "ADVI")
+
+
+# In[14]:
+
+
 
 
