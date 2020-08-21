@@ -28,7 +28,7 @@ from tqdm import trange
 
 # For ADVI
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, JitTraceEnum_ELBO, JitTrace_ELBO
-from pyro.contrib.autoguide import AutoDiagonalNormal
+from pyro.contrib.autoguide import *
 from pyro.optim import Adam
 
 
@@ -38,39 +38,13 @@ from pyro.optim import Adam
 # Stick break function
 # See: https://pyro.ai/examples/dirichlet_process_mixture.html
 def stickbreak(v):
-    # cumprod_one_minus_v = torch.log1p(-v).cumsum(-1).exp()
     cumprod_one_minus_v = torch.cumprod(1 - v, dim=-1)
-    one_v = pad(v, (0, 1), value=1)
-    c_one = pad(cumprod_one_minus_v, (1, 0), value=1)
-    return one_v * c_one
+    v_one = pad(v, (0, 1), value=1)
+    one_c = pad(cumprod_one_minus_v, (1, 0), value=1)
+    return v_one * one_c
 
 
 # In[4]:
-
-
-# NOTE: This resulted in poor inference.
-class GMM(dist.Distribution):
-    def __init__(self, mu, sigma, w):
-        self.mu = mu
-        self.sigma = sigma
-        self.w = w
-    
-    def sample(self, sample_shape=()):
-        return torch.zeros((1, ) + sample_shape)
-    
-    def log_prob(self, y, dim=-1):
-        lp = dist.Normal(self.mu, self.sigma).log_prob(y) + torch.log(self.w)
-        return lp.logsumexp(dim=dim)
-
-# Example:
-# mu = torch.randn(1, 3)
-# sigma = torch.rand(1, 3)
-# w = stickbreak(torch.rand(1, 2))
-# y = torch.randn(10, )
-# GMM(mu, sigma, w).log_prob(y[:, None])
-
-
-# In[5]:
 
 
 # See: https://pyro.ai/examples/gmm.html#
@@ -109,14 +83,15 @@ def dp_sb_gmm(y, num_components):
         sigma = pyro.sample('sigma', dist.Gamma(1, 10))
 
     with pyro.plate('data', N):
-            # Local variables.
-        label = pyro.sample('label', dist.Categorical(eta), infer={"enumerate": "parallel"})
-        pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
-        # For marginalized version.
-        # pyro.sample('obs', GMM(mu[None, :], sigma[None, :], eta[None, :]), obs=y[:, None])
+        # Mixture version.
+        pyro.sample('obs', dist.MixtureSameFamily(
+            dist.Categorical(eta), dist.Normal(mu, sigma)), obs=y)
+        # Local variables version.
+        # label = pyro.sample('label', dist.Categorical(eta), infer={"enumerate": "parallel"})
+        # pyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
-# In[6]:
+# In[5]:
 
 
 # Read simulated data.
@@ -125,20 +100,20 @@ with open(path_to_data) as f:
     simdata = json.load(f)
 
 
-# In[7]:
+# In[6]:
 
 
 # Convert data to torch.tensor.
 y = torch.tensor(simdata['y'])
 
 
+# In[7]:
+
+
+get_ipython().run_cell_magic('time', '', "\n# See: https://pyro.ai/examples/dirichlet_process_mixture.html\n\npyro.clear_param_store()\npyro.set_rng_seed(2)\n\n# Automatically define mean-field variational distribution.\nguide = AutoDiagonalNormal(dp_sb_gmm, init_to_uniform, init_scale=0.1)\n\nelbo = Trace_ELBO()\nsvi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-1}), elbo)\n\n# do gradient steps\nloss = []\nfor step in trange(2000):\n    _loss = svi.step(y, 10)\n    loss.append(_loss)\n    \n# Plot ELBO    \nplt.plot(loss);")
+
+
 # In[8]:
-
-
-get_ipython().run_cell_magic('time', '', "\n# See: https://pyro.ai/examples/dirichlet_process_mixture.html\n\npyro.clear_param_store()\n\n# Automatically define variational distribution.\nguide = AutoDiagonalNormal(\n    pyro.poutine.block(dp_sb_gmm, expose=['alpha', 'v', 'mu', 'sigma'])\n)  # a mean field guide\n\nelbo = TraceEnum_ELBO()\nsvi = SVI(dp_sb_gmm, guide, Adam({'lr': 1e-2}), elbo)\n\n# pyro.set_rng_seed(4)\npyro.set_rng_seed(7)\n\n# do gradient steps\nloss = []\nfor step in trange(2000):\n    _loss = svi.step(y, 10)\n    loss.append(_loss)\n    \n# Plot ELBO    \nplt.plot(loss);")
-
-
-# In[9]:
 
 
 samples = guide.get_posterior().sample((1000, ))
@@ -172,7 +147,7 @@ plt.xlabel('alpha')
 plt.ylabel('density');
 
 
-# In[11]:
+# In[9]:
 
 
 pyro.clear_param_store()
@@ -193,7 +168,7 @@ hmc_posterior_samples = hmc.get_samples()
 hmc_posterior_samples['eta'] = stickbreak(hmc_posterior_samples['v'])
 
 
-# In[12]:
+# In[10]:
 
 
 pyro.clear_param_store()
@@ -213,7 +188,7 @@ nuts_posterior_samples = nuts.get_samples()
 nuts_posterior_samples['eta'] = stickbreak(nuts_posterior_samples['v'])
 
 
-# In[13]:
+# In[11]:
 
 
 def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
@@ -236,7 +211,7 @@ def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=
     plt.title('Trace plot of {}'.format(param_full_name));
 
 
-# In[14]:
+# In[12]:
 
 
 def plot_all_params(params):
@@ -252,13 +227,13 @@ def plot_all_params(params):
     plt.title("Posterior distribution of alpha");
 
 
-# In[15]:
+# In[13]:
 
 
 plot_all_params(hmc_posterior_samples)
 
 
-# In[16]:
+# In[14]:
 
 
 plot_all_params(nuts_posterior_samples)
