@@ -74,13 +74,14 @@ def get_pyro_gp_times(path):
     nb_content = read_file(path)
     t = re.findall(r'(?<=\[)\d+[:\d+]+', nb_content)
     t = list(map(sanitize_hms, t))
-    print(t)
+    r = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
+    r = list(map(sanitize_py, r))
     return dict(model='gp',
                 ppl='pyro',
-                advi_compile=np.nan,
+                advi_compile=0,
                 hmc_compile=0,
                 nuts_compile=0,
-                advi_run=np.nan,
+                advi_run=r[3],
                 hmc_run=t[1],
                 nuts_run=t[3])
 
@@ -102,7 +103,6 @@ def get_numpyro_gp_times(path):
 def get_tfp_gp_times(path):
     nb_content = read_file(path)
     t = re.findall(r'(?<=Wall time:\s).*(?=\\n)', nb_content)
-    print(t)
     t = list(map(sanitize_py, t))
     return dict(model='gp',
                 ppl='tfp',
