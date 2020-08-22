@@ -182,7 +182,7 @@ function plot_fn_posterior(samples; figsize=(12, 4), figsize_f=figsize, suffix="
     # Uses AbstractGPs: GP, posterior.
     X_new = reshape(collect(range(-3.5, 3.5, length=100)), 100, 1)
     ynew = [let
-        kernel = ModifiedSqExpKernel(alpha[i], rho[i])
+        kernel = sqexpkernel(alpha[i], rho[i])
         kernel += 1e-12 * EyeKernel()  # for numerical stability.
         f = GP(kernel)
         pfx = posterior(f(X[:,1], sigma[i]^2), y)

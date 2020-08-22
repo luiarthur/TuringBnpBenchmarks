@@ -12,11 +12,13 @@ get_ipython().system('echo "Last updated: `date`"')
 
 import json
 import matplotlib.pyplot as plt
-from jax import random
+from jax import random, lax
 import jax.numpy as np
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, HMC
+from numpyro.infer.autoguide import AutoDiagonalNormal
+from numpyro.infer import SVI, ELBO
 import numpy as onp
 
 import sys
@@ -95,6 +97,43 @@ gp_plot_util.make_plots(hmc_samples, suffix="HMC",
 
 # Plot posterior for NUTS
 gp_plot_util.make_plots(hmc_samples, suffix="NUTS",
+                        x=X, y=y, x_grid=x_grid, f=f, sigma_true=simdata['sigma'])
+
+
+# In[9]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Compile\nguide = AutoDiagonalNormal(GP)\noptimizer = numpyro.optim.Adam(step_size=0.01)\nsvi = SVI(GP, guide, optimizer, loss=ELBO())\ninit_state = svi.init(random.PRNGKey(1), X, y)')
+
+
+# In[10]:
+
+
+get_ipython().run_cell_magic('time', '', '# Run optimizer for 1000 iteratons.\nstate, losses = lax.scan(lambda state, i: \n                         svi.update(state, X, y),\n                         init_state, np.arange(2000))\n\n# Extract surrogate posterior.\nparams = svi.get_params(state)\nplt.plot(losses);\nplt.title("Negative ELBO (Loss)");')
+
+
+# In[11]:
+
+
+def sample_posterior(guide, params, nsamples, seed=1):
+    samples = guide.get_posterior(params).sample(
+        random.PRNGKey(seed), (nsamples, ))
+    # NOTE: Samples are arranged in alphabetical order.
+    #       Not in the order in which they appear in the
+    #       model. This is different from pyro.
+    return dict(rho=onp.exp(samples[:, 0]),  # kernel_length
+                alpha=onp.exp(samples[:, 1]),  # kernel_variance
+                sigma=onp.exp(samples[:, 2]))  # sigma
+
+advi_samples = sample_posterior(guide, params,
+                                nsamples=1000, seed=1)
+
+
+# In[12]:
+
+
+# Plot posterior for ADVI
+gp_plot_util.make_plots(advi_samples, suffix="ADVI",
                         x=X, y=y, x_grid=x_grid, f=f, sigma_true=simdata['sigma'])
 
 

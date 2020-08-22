@@ -92,10 +92,10 @@ def get_numpyro_gp_times(path):
     t = list(map(sanitize_py, t))
     return dict(model='gp',
                 ppl='numpyro',
-                advi_compile=np.nan,
+                advi_compile=t[2],
                 hmc_compile=t[0] - r[0],
                 nuts_compile=t[1] - r[1],
-                advi_run=np.nan,
+                advi_run=t[3],
                 hmc_run=r[0],
                 nuts_run=r[1])
 
