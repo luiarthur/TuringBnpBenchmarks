@@ -41,4 +41,31 @@ nuts.run(rng_key, X, y)
 nuts_samples = hmc.get_samples()
 
 
-### NOTE: Could not successfully implement ADVI. ###
+## FIT GP via ADVI ###
+
+# Setup
+guide = AutoDiagonalNormal(GP)
+optimizer = numpyro.optim.Adam(step_size=0.01)
+svi = SVI(GP, guide, optimizer, loss=ELBO())
+init_state = svi.init(random.PRNGKey(1), X, y)
+
+# Run optimizer for 2000 iterations.
+state, losses = lax.scan(lambda state, i: 
+                         svi.update(state, X, y),
+                         init_state, np.arange(2000))
+
+# Extract surrogate posterior.
+params = svi.get_params(state)
+
+def sample_posterior(guide, params, nsamples, seed=1):
+    samples = guide.get_posterior(params).sample(
+        random.PRNGKey(seed), (nsamples, ))
+    # NOTE: Samples are arranged in alphabetical order.
+    #       Not in the order in which they appear in the
+    #       model. This is different from pyro.
+    return dict(rho=onp.exp(samples[:, 0]),  # kernel_length
+                alpha=onp.exp(samples[:, 1]),  # kernel_variance
+                sigma=onp.exp(samples[:, 2]))  # sigma
+
+advi_samples = sample_posterior(guide, params,
+                                nsamples=1000, seed=1)

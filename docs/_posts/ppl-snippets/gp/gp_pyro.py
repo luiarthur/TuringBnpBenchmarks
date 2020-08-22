@@ -35,7 +35,7 @@ hmc.run()  # Run sampler.
 hmc_posterior_samples = hmc.get_samples() # Get posterior samples
 
 
-## NUTS ###
+### NUTS ###
 pyro.clear_param_store() 
 pyro.set_rng_seed(1)
 nuts_gpr = make_gp_model(X, y)
@@ -44,4 +44,27 @@ nuts = MCMC(kernel, num_samples=1000, warmup_steps=1000)
 nuts.run()
 nuts_posterior_samples = nuts.get_samples()
 
-# NOTE: Could not implement ADVI.
+
+### ADVI ###
+pyro.clear_param_store()  # clear global parameter cache
+pyro.set_rng_seed(1)  # set random seed
+
+# Automatically define variational distribution (a mean field guide).
+guide = AutoDiagonalNormal(gp_model)
+
+# Create SVI object for optimization.
+svi = SVI(gp_model, guide, Adam({'lr': 1e-2}), JitTrace_ELBO())
+
+# Do 1000 gradient steps.
+advi_loss = []
+for step in trange(1000):
+    advi_loss.append(svi.step(X, y.double()))
+    
+# Bijector for advi samples.
+def biject(samples):
+    return dict(alpha=samples[:, 0].exp().numpy(),
+                rho=samples[:, 1].exp().numpy(),
+                sigma=samples[:, 2].exp().numpy())
+
+# Get ADVI samples in constrained space.
+advi_posterior_samples = biject(guide.get_posterior().sample((1000, )))
