@@ -19,6 +19,8 @@ https://jekyllrb.com/tutorials/csv-to-table/
 
 Last updated: {{ page.date_last_modified }}
 
+WIP
+
 ***
 
 <img src="{{ "/assets/img/gp-classify/data.png" | prepend: site.baseurl }}"
@@ -53,7 +55,6 @@ Last updated: {{ page.date_last_modified }}
 </div>
 {% endfor %}
 
-#
 
 ## Timings
 
