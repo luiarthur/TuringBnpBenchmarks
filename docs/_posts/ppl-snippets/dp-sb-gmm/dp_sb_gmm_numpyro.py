@@ -67,9 +67,6 @@ def dp_sb_gmm(y, num_components):
 # Here, y (a vector of length 200) is noisy univariate draws from a
 # mixture distribution with 4 components.
 
-# NOTE: Due to lack of documentation, I was not able to implement
-# an example via ADVI in numpyro.
-
 # Set random seed for reproducibility.
 rng_key = random.PRNGKey(0)
 
@@ -85,3 +82,31 @@ kernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)
 nuts = MCMC(kernel, num_samples=500, num_warmup=500)
 nuts.run(rng_key, y, 10)
 nuts_samples = get_posterior_samples(nuts)
+
+# FIT DP SB GMM via ADVI
+sigmoid = lambda x: 1 / (1 + onp.exp(-x))
+
+# Setup ADVI.
+guide = AutoDiagonalNormal(dp_sb_gmm)  # surrogate posterior
+optimizer = numpyro.optim.Adam(step_size=0.01)  # adam optimizer
+svi = SVI(guide.model, guide, optimizer, loss=ELBO())  # ELBO loss
+init_state = svi.init(random.PRNGKey(2), y, 10)  # initial state
+
+# Run optimizer
+state, losses = lax.scan(lambda state, i: 
+                         svi.update(state, y, 10), init_state, np.arange(2000))
+
+# Extract surrogate posterior.
+params = svi.get_params(state)
+def sample_advi_posterior(guide, params, nsamples, seed=1):
+    samples = guide.get_posterior(params).sample(random.PRNGKey(seed),
+                                                 (nsamples, ))
+    # NOTE: Samples are arranged in alphabetical order.
+    #       Not in the order in which they appear in the
+    #       model. This is different from pyro.
+    return dict(alpha=onp.exp(samples[:, 0]),
+                mu=onp.array(samples[:, 1:11]).T,
+                sigma=onp.exp(samples[:, 11:21]).T,
+                eta=onp.array(stickbreak(sigmoid(samples[:, 21:]))).T)  # v
+
+advi_samples = sample_advi_posterior(guide, params, nsamples=500, seed=1)
