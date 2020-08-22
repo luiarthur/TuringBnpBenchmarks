@@ -1,33 +1,72 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[4]:
 
 
-import datetime
-print('Last updated: ', datetime.datetime.now(), '(PT)')
+get_ipython().system('echo "Last updated: `date`"')
 
 
-# In[2]:
+# In[5]:
 
 
 import json
 import matplotlib.pyplot as plt
-from jax import random
+from jax import random, lax
 import jax.numpy as np
 from jax.scipy.special import logsumexp
 import numpyro
 import numpyro.distributions as dist
 from numpyro.distributions import constraints
-# from pyro.optim import Adam
-# from pyro.infer import SVI, Trace_ELBO
-# from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate, infer_discrete
-# from pyro.contrib.autoguide import AutoDiagonalNormal
+from numpyro.infer.autoguide import AutoDiagonalNormal
+from numpyro.infer import SVI, ELBO
 from numpyro.infer import MCMC, NUTS, HMC
 import numpy as onp
 
 
-# In[3]:
+# In[19]:
+
+
+def plot_param_post(params, param_name, param_full_name, figsize=(12, 4),
+                    truth=None, plot_trace=True):
+    if plot_trace:
+        plt.figure(figsize=figsize)
+        
+    param = params[param_name]
+
+    if plot_trace:
+        plt.subplot(1, 2, 1)
+        
+    plt.boxplot(param.T, whis=[2.5, 97.5], showmeans=True, showfliers=False)
+    plt.xlabel('mixture components')
+    plt.ylabel(param_full_name)
+    plt.title('95% Credible Intervals for {}'.format(param_full_name))
+    if truth is not None:
+        for line in truth:
+            plt.axhline(line, ls=':')
+
+    if plot_trace:
+        plt.subplot(1, 2, 2)
+        plt.plot(param);
+        plt.xlabel('iterations')
+        plt.ylabel(param_full_name)
+        plt.title('Trace plot of {}'.format(param_full_name));
+
+def plot_all_params(samples):
+    # TODO: How to get log-likelihood?
+    plot_param_post(samples, 'eta', 'mixture weights', truth=simdata['w'])
+    plot_param_post(samples, 'mu', 'mixture means', truth=simdata['mu'])
+    plot_param_post(samples, 'sigma', 'mixture scales', truth=simdata['sig'])
+    
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.hist(samples['alpha'], bins=30, density=True);
+    plt.xlabel("alpha")
+    plt.ylabel("density")
+    plt.title("Posterior distribution of alpha");
+
+
+# In[7]:
 
 
 # Stick break function
@@ -43,7 +82,7 @@ def stickbreak(v):
 # stickbreak(x);  # last dimension sums to 1.
 
 
-# In[4]:
+# In[8]:
 
 
 # Custom distribution: Mixture of normals.
@@ -66,7 +105,7 @@ class NormalMixture(dist.Distribution):
         return logsumexp(lp, axis=axis)
 
 
-# In[5]:
+# In[9]:
 
 
 # Example:
@@ -80,7 +119,7 @@ class NormalMixture(dist.Distribution):
 # print(lp_x)
 
 
-# In[6]:
+# In[10]:
 
 
 # DP SB GMM model.
@@ -113,13 +152,14 @@ def dp_sb_gmm(y, num_components):
         sigma = numpyro.sample('sigma', dist.Gamma(1, 10))
 
     with numpyro.plate('data', N):
-        numpyro.sample('obs', NormalMixture(mu[None, :] , sigma[None, :], eta[None, :]), obs=y[:, None])
-    #     Local variables.
-    #     label = numpyro.sample('label', dist.Categorical(eta))
-    #     numpyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
+        numpyro.sample('obs', NormalMixture(mu[None, :] , sigma[None, :], eta[None, :]),
+                       obs=y[:, None])
+        # Local variables version:
+        # label = numpyro.sample('label', dist.Categorical(eta))
+        # numpyro.sample('obs', dist.Normal(mu[label], sigma[label]), obs=y)
 
 
-# In[7]:
+# In[11]:
 
 
 # Read simulated data.
@@ -128,53 +168,65 @@ with open(path_to_data) as f:
   simdata = json.load(f)
 
 
-# In[8]:
+# In[12]:
 
 
 # Convert data to torch.tensor.
 y = np.array(simdata['y'])
 
 
-# In[9]:
+# ## ADVI
+
+# In[13]:
 
 
-# %%time
-# # Experimental, syntax not known.
-# 
-# # For ADVI
-# from numpyro.infer import SVI, ELBO
-# from numpyro.contrib.autoguide import AutoDiagonalNormal
-# from numpyro.optim import Adam
-# from functools import namedtuple
-# from tqdm import trange
-# from functools import namedtuple
-# 
-# # SVIState namedtuple
-# SVIState = namedtuple('SVIState', ['optim_state', 'rng_key'])
-# 
-# # Set random seed for reproducibility.
-# rng_key = random.PRNGKey(0)
-# 
-# # Automatically define variational distribution.
-# guide = AutoDiagonalNormal(dp_sb_gmm)  # a mean field guide
-# 
-# # Adam Optimizer
-# opt = Adam({'lr': 1e-2})
-# # opt = numpyro.optim.optimizers.adam(0.01)
-# 
-# svi = SVI(dp_sb_gmm, guide, opt, ELBO())
-# 
-# # svi_state = SVIState(opt, rng_key)
-# 
-# # do gradient steps
-# loss = []
-# for step in trange(2000):
-#     _loss = svi.update(svi_state, y=y, num_components=10)
-#     loss.append(_loss)
-#     
-# # Plot ELBO    
-# plt.plot(loss);
+sigmoid = lambda x: 1 / (1 + onp.exp(-x))
 
+
+# In[14]:
+
+
+def sample_advi_posterior(guide, params, nsamples, seed=1):
+    samples = guide.get_posterior(params).sample(random.PRNGKey(seed), (nsamples, ))
+    # NOTE: Samples are arranged in alphabetical order.
+    #       Not in the order in which they appear in the
+    #       model. This is different from pyro.
+    return dict(alpha=onp.exp(samples[:, 0]),
+                mu=onp.array(samples[:, 1:11]).T,
+                sigma=onp.exp(samples[:, 11:21]).T,
+                eta=onp.array(stickbreak(sigmoid(samples[:, 21:]))).T)  # v
+
+
+# In[15]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Compile\nguide = AutoDiagonalNormal(dp_sb_gmm)\noptimizer = numpyro.optim.Adam(step_size=0.01)\nsvi = SVI(guide.model, guide, optimizer, loss=ELBO())\ninit_state = svi.init(random.PRNGKey(2), y, 10)')
+
+
+# In[16]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Run optimizer\nstate, losses = lax.scan(lambda state, i: \n                         svi.update(state, y, 10), init_state, np.arange(2000))\n\n# Extract surrogate posterior.\nparams = svi.get_params(state)\nplt.plot(losses);\nplt.title("Negative ELBO")\nadvi_samples = sample_advi_posterior(guide, params, nsamples=500, seed=1)')
+
+
+# In[25]:
+
+
+plt.figure(figsize=(12, 12))
+
+plt.subplot(2, 2, 1)
+plot_param_post(advi_samples, 'eta', 'mixture weights', truth=simdata['w'], plot_trace=False)
+plt.subplot(2, 2, 2)
+plt.hist(advi_samples['alpha'], bins=30, density=True); plt.title("Histogram of alpha")
+plt.subplot(2, 2, 3)
+plot_param_post(advi_samples, 'mu', 'mixture means', truth=simdata['mu'], plot_trace=False)
+plt.subplot(2, 2, 4)
+plot_param_post(advi_samples, 'sigma', 'mixture scales', truth=simdata['sig'], plot_trace=False)
+
+plt.tight_layout()
+
+
+# ## HMC
 
 # In[10]:
 
@@ -192,59 +244,21 @@ def get_posterior_samples(mcmc):
 # In[14]:
 
 
-get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1,\n             adapt_step_size=False, adapt_mass_matrix=False) \n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
-
-
-# In[15]:
-
-
-get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\nnuts = MCMC(kernel, num_samples=500, num_warmup=500)\nnuts.run(rng_key, y, 10)\n\nnuts_samples = get_posterior_samples(nuts)')
-
-
-# In[16]:
-
-
-def plot_param_post(params, param_name, param_full_name, figsize=(12, 4), truth=None):
-    plt.figure(figsize=figsize)
-    param = params[param_name]
-
-    plt.subplot(1, 2, 1)
-    plt.boxplot(param.T, whis=[2.5, 97.5], showmeans=True, showfliers=False)
-    plt.xlabel('mixture components')
-    plt.ylabel(param_full_name)
-    plt.title('95% Credible Intervals for {}'.format(param_full_name))
-    if truth is not None:
-        for line in truth:
-            plt.axhline(line, ls=':')
-
-    plt.subplot(1, 2, 2)
-    plt.plot(param);
-    plt.xlabel('iterations')
-    plt.ylabel(param_full_name)
-    plt.title('Trace plot of {}'.format(param_full_name));
-
-
-# In[17]:
-
-
-def plot_all_params(samples):
-    # TODO: How to get log-likelihood?
-    plot_param_post(samples, 'eta', 'mixture weights', truth=simdata['w'])
-    plot_param_post(samples, 'mu', 'mixture means', truth=simdata['mu'])
-    plot_param_post(samples, 'sigma', 'mixture scales', truth=simdata['sig'])
-    
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    plt.hist(samples['alpha'], bins=30, density=True);
-    plt.xlabel("alpha")
-    plt.ylabel("density")
-    plt.title("Posterior distribution of alpha");
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# NOTE: num_leapfrog = trajectory_length / step_size\nkernel = HMC(dp_sb_gmm, step_size=.01, trajectory_length=1,\n             adapt_step_size=False, adapt_mass_matrix=False)\n\nhmc = MCMC(kernel, num_samples=500, num_warmup=500)\nhmc.run(rng_key, y, 10)\n\nhmc_samples = get_posterior_samples(hmc)')
 
 
 # In[18]:
 
 
 plot_all_params(hmc_samples)
+
+
+# ## NUTS
+
+# In[15]:
+
+
+get_ipython().run_cell_magic('time', '', '\n# Set random seed for reproducibility.\nrng_key = random.PRNGKey(0)\n\n# Set up NUTS sampler.\nkernel = NUTS(dp_sb_gmm, max_tree_depth=10, target_accept_prob=0.8)\n\nnuts = MCMC(kernel, num_samples=500, num_warmup=500)\nnuts.run(rng_key, y, 10)\n\nnuts_samples = get_posterior_samples(nuts)')
 
 
 # In[19]:
