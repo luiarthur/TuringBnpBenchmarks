@@ -23,15 +23,34 @@ WIP
 
 ***
 
+As a follow up to the previous post, this post demonstrates how Gaussian
+Process (GP) models for binary classification are specified in various PPLs
+(Turing, STAN, tensorflow-probability, Pyro, Numpyro).
+
+## Data
+
+We will use the following dataset for this tutorial.
 <img src="{{ "/assets/img/gp-classify/data.png" | prepend: site.baseurl }}"
      class="center" alt="data image"/>
+This dataset was generated using `make_moons` from the `sklearn` python
+library.  It input ($X$) is a two-dimensional, and the response ($y$) is binary
+(blue=0, red=1). The goal, given this dataset, is to predict the response
+at new locations. We will use a GP binary classifier for this task.
 
-<img src="{{ "/assets/img/gp-classify/uq.png" | prepend: site.baseurl }}"
-     class="center" alt="UQ for GP classification"/>
-
-<img src="{{ "/assets/img/gp-classify/kernel_params.png" |
-             prepend: site.baseurl }}"
-     class="center" alt="kerenl parameters posterior"/>
+## Model
+The model is specified as follows:
+$$
+\begin{eqnarray}
+y_n \mid p_n &\sim& \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
+\text{logit}(\mathbf{p}) &=& \mathbf{L} \cdot \boldsymbol{\eta} + \beta\cdot\mathbf{1}_N,
+\text{ where }
+\mathbf{L} = \text{cholesky}(\mathbf{K}) \\
+\eta_n &\sim& \text{Normal(0, 1)}, \text{ for } n=1,\dots,N \\
+\beta &\sim& \text{Normal(0, 1)} \\
+\alpha &\sim& \text{LogNormal}(0, 1) \\
+\rho &\sim& \text{LogNormal}(0, 1) \\
+\end{eqnarray}
+$$
 
 ## PPL Comparisons
 <!-- Buttons Div for appending buttons-->
@@ -54,6 +73,15 @@ WIP
     {% endif %}
 </div>
 {% endfor %}
+
+## Results
+
+<img src="{{ "/assets/img/gp-classify/uq.png" | prepend: site.baseurl }}"
+     class="center" alt="UQ for GP classification"/>
+
+<img src="{{ "/assets/img/gp-classify/kernel_params.png" |
+             prepend: site.baseurl }}"
+     class="center" alt="kerenl parameters posterior"/>
 
 
 ## Timings
