@@ -20,7 +20,7 @@ sqexpkernel(alpha::Real, rho::Real) =
     rho ~ LogNormal(0.0, 1.0)
     sigma ~ LogNormal(0.0, 1.0)
     
-    # Realized covariance function
+    # Covariance function
     kernel = sqexpkernel(alpha, rho)
     f = GP(kernel)
     

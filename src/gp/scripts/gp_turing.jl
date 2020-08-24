@@ -31,8 +31,6 @@ function make_extractor(m, q, nsamples=1000)
 end
 ;
 
-rand(GP(SEKernel())(RowVecs(randn(5, 2))))
-
 # Define a kernel.
 sqexpkernel(alpha::Real, rho::Real) =
     alpha^2 * transform(SEKernel(), 1/(rho*sqrt(2)))
@@ -43,8 +41,10 @@ sqexpkernel(alpha::Real, rho::Real) =
     rho ~ LogNormal(0.0, 1.0)
     sigma ~ LogNormal(0.0, 1.0)
     
-    # Realized covariance function
+    # Covariance function.
     kernel = sqexpkernel(alpha, rho)
+    
+    # GP for mean function.
     f = GP(kernel)
     
     # Sampling Distribution.
