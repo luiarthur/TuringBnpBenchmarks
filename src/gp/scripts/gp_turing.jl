@@ -31,22 +31,29 @@ function make_extractor(m, q, nsamples=1000)
 end
 ;
 
-# Define a kernel.
-sqexpkernel(alpha::Real, rho::Real) = alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
+rand(GP(SEKernel())(RowVecs(randn(5, 2))))
 
-@model function GPRegression(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0,
-                             s_rho=1.0, m_sigma=0.0, s_sigma=1.0)
+# Define a kernel.
+sqexpkernel(alpha::Real, rho::Real) =
+    alpha^2 * transform(SEKernel(), 1/(rho*sqrt(2)))
+
+@model GPRegression(y, X) = begin
     # Priors.
-    alpha ~ LogNormal(m_alpha, s_alpha)
-    rho ~ LogNormal(m_rho, s_rho)
-    sigma ~ LogNormal(m_sigma, s_sigma)
+    alpha ~ LogNormal(0.0, 0.1)
+    rho ~ LogNormal(0.0, 1.0)
+    sigma ~ LogNormal(0.0, 1.0)
     
     # Realized covariance function
     kernel = sqexpkernel(alpha, rho)
-    K = kernelmatrix(kernel, X, obsdim=1)
+    f = GP(kernel)
     
     # Sampling Distribution.
-    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K + σ²I.
+    # NOTE: if X is (N x D), where N=locations, D=input-dimensions, do
+    # y ~ f(RowVecs(X), sigma^2 + 1e-6)
+    #
+    # Similarly, if X is (D x N),
+    # y ~ f(ColVecs(X), sigma^2 + 1e-6)
+    y ~ f(X, sigma^2 + 1e-6)  # add 1e-6 for numerical stability.
 end;
 
 # Read data.
@@ -60,9 +67,9 @@ data = let
     JSON3.read(x)
 end
 
-# Reshape data if needed.
+# Store data in (X, y) for convenience.
 y = Float64.(data[:y])
-X = Float64.(reshape(data[:x], length(y), 1))
+X = Float64.(data[:x])
 
 f = Float64.(data[:f])
 x_grid = Float64.(data[:x_grid])
@@ -70,22 +77,14 @@ x_grid = Float64.(data[:x_grid])
 N = size(X, 1);
 
 # Plot data
-plt.scatter(vec(X), y, label="Data")
+plt.scatter(X, y, label="Data")
 plt.plot(x_grid, f, c="grey", ls=":", label="True f(x)")
 plt.xlabel("x")
 plt.ylabel("y")
 plt.legend();
 
 # Create model.
-m = begin
-    m_alpha = 0.0
-    s_alpha = 0.1
-    m_rho = 0.0
-    s_rho = 1.0
-    m_sigma = 0.0
-    s_sigma = 1.0
-    GPRegression(y, X, m_alpha, s_alpha, m_rho, s_rho, m_sigma, s_sigma)
-end;
+m =  GPRegression(y, X);
 
 # Fit via ADVI.
 Random.seed!(0)
@@ -126,12 +125,13 @@ sigma = vec(group(chain, :sigma).value.data[end-nsamples:end, :, 1]);
 hmc_samples = Dict(:alpha => alpha, :rho => rho, :sigma => sigma);
 
 # Fit via NUTS.
-Random.seed!(7)
 
 # Compile
-@time _ = sample(m, NUTS(10, 0.8), 20);
+Random.seed!(1)
+@time _ = sample(m, NUTS(1, 0.8), 2);
 
 # Run
+Random.seed!(1)
 @time chain = begin
     nsamples = 1000  # number of MCMC samples
     nadapt = 1000  # number of iterations to adapt tuning parameters in NUTS
@@ -142,9 +142,9 @@ Random.seed!(7)
 end
 
 # Get posterior samples
-alpha = vec(group(chain, :alpha).value.data[:, :, 1]);
-rho = vec(group(chain, :rho).value.data[:, :, 1]);
-sigma = vec(group(chain, :sigma).value.data[:, :, 1]);
+alpha = vec(group(chain, :alpha).value.data);
+rho = vec(group(chain, :rho).value.data);
+sigma = vec(group(chain, :sigma).value.data);
 nuts_samples = Dict(:alpha => alpha, :rho => rho, :sigma => sigma);
 
 # Function for plotting parameter posterior.

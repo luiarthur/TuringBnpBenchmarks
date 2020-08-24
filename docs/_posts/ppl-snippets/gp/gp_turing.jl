@@ -13,26 +13,27 @@ import LinearAlgebra
 sqexpkernel(alpha::Real, rho::Real) = 
     alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
 
-@model function GPRegression(y, X, m_alpha=0.0, s_alpha=1.0, m_rho=0.0,
-                             s_rho=1.0, m_sigma=0.0, s_sigma=1.0)
+# Define model.
+@model GPRegression(y, X) = begin
     # Priors.
-    alpha ~ LogNormal(m_alpha, s_alpha)
-    rho ~ LogNormal(m_rho, s_rho)
-    sigma ~ LogNormal(m_sigma, s_sigma)
+    alpha ~ LogNormal(0.0, 0.1)
+    rho ~ LogNormal(0.0, 1.0)
+    sigma ~ LogNormal(0.0, 1.0)
     
     # Realized covariance function
     kernel = sqexpkernel(alpha, rho)
-    K = kernelmatrix(kernel, X, obsdim=1)
+    f = GP(kernel)
     
     # Sampling Distribution.
-    y ~ MvNormal(K + LinearAlgebra.I * sigma^2)  # mean=0, covariance=K + σ²I.
+    y ~ f(X, sigma^2 + 1e-6)  # add 1e-6 for numerical stability.
 end;
+
 
 # Set random number generator seed.
 Random.seed!(0)  
 
 # Model creation.
-m = GP(y, X, sqexp_cov_fn, 0.0, 0.1)
+m = GP(y, X)
 
 
 # Fit via ADVI.
