@@ -33,7 +33,7 @@ end;
 Random.seed!(0)  
 
 # Model creation.
-m = GP(y, X)
+m = GPRegression(y, X)
 
 
 # Fit via ADVI.
