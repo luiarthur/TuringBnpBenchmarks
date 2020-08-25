@@ -23,7 +23,7 @@ sqexpkernel(alpha::Real, rho::Real) =
     # Covariance function.
     kernel = sqexpkernel(alpha, rho)
 
-    # Finite GP.
+    # Finite GP (implicit zero-mean).
     gp = GP(kernel)
     
     # Sampling Distribution (MvNormal likelihood).
