@@ -20,12 +20,14 @@ sqexpkernel(alpha::Real, rho::Real) =
     rho ~ LogNormal(0.0, 1.0)
     sigma ~ LogNormal(0.0, 1.0)
     
-    # Covariance function
+    # Covariance function.
     kernel = sqexpkernel(alpha, rho)
-    f = GP(kernel)
+
+    # Finite GP.
+    gp = GP(kernel)
     
-    # Sampling Distribution.
-    y ~ f(X, sigma^2 + 1e-6)  # add 1e-6 for numerical stability.
+    # Sampling Distribution (MvNormal likelihood).
+    y ~ gp(X, sigma^2 + 1e-6)  # add 1e-6 for numerical stability.
 end;
 
 
