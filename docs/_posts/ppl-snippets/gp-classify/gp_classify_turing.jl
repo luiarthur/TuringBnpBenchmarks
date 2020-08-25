@@ -43,7 +43,7 @@ function make_surrogate_sampler(m, q; nsamples=300)
 end;
 
 ### Read data ###
-# See: https://github.com/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-classify/data/gp-classify-data-N50.json
+# See data in Notebook.
 data_path = joinpath(@__DIR__, "../data/gp-classify-data-N50.json")
 
 # Load data in JSON format.
