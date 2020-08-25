@@ -18,9 +18,8 @@ import StatsBase.countmap
 include(joinpath(@__DIR__, "../util/BnpUtil.jl"));
 
 # Directory where all simulation data are stored.
-data_dir = joinpath(@__DIR__, "../../data/sim-data")
+data_dir = joinpath(@__DIR__, "../data")
 path_to_data = joinpath(data_dir, "gmm-data-n50.json")
-# path_to_data = joinpath(data_dir, "gmm-data-n200.json")
 
 # Load data in JSON format.
 data = let

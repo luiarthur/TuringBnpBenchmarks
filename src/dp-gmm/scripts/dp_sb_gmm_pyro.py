@@ -95,7 +95,7 @@ def dp_sb_gmm(y, num_components):
 
 
 # Read simulated data.
-path_to_data = '../../data/sim-data/gmm-data-n200.json'
+path_to_data = '../data/gmm-data-n200.json'
 with open(path_to_data) as f:
     simdata = json.load(f)
 

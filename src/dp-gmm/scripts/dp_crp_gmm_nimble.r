@@ -49,7 +49,7 @@ model.code = nimbleCode({
 })
 
 # Read and visualize data.
-path_to_simdata = "../../data/sim-data/gmm-data-n200.json"
+path_to_simdata = "../data/gmm-data-n200.json"
 simdata = fromJSON(file=path_to_simdata)
 hist(simdata$y, breaks=30)
 
