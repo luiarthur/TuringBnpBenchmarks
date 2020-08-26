@@ -17,28 +17,31 @@ import Random
 import LinearAlgebra
 
 # Define a kernel.
-function sqexpkernel(alpha::Real, rho::Real)
-    alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
+function sekernel(alpha, rho, jitter=0)
+  kernel = alpha^2 * transform(SEKernel(), invsqrt2/rho)
+  jitter <= 0 || (kernel += jitter * EyeKernel())
+  return kernel
 end
 
-@model function GPClassify(y, X, eps=1e-6)
+function compute_f(kernel, X, eta, beta=0, jitter=0)
+  K = kernelmatrix(kernel, X, obsdim=1)
+  jitter <= 0 || (K += LinearAlgebra.I * jitter)
+  return LinearAlgebra.cholesky(K).L * eta .+ beta
+end
+
+@model function GPClassify(y, X, jitter=1e-6)
     # Priors.
     alpha ~ LogNormal(0, 1)
     rho ~ LogNormal(0, 1)
     beta ~ Normal(0, 1)  # intercept.
-
-    # Realized covariance function
-    kernel = sqexpkernel(alpha, rho) + eps * EyeKernel()
-    K = kernelmatrix(kernel, X, obsdim=1)
-    
-    # Latent function.
     eta ~ filldist(Normal(0, 1), length(y))
-    f = LinearAlgebra.cholesky(K).L * eta
-    # NOTE: The following more explicit form mixes very poorly.
-    # f ~ MvNormal(K)  # mean=0, covariance=K.
+
+    # Latent GP
+    kernel = sekernel(alpha, rho)
+    f = compute_f(sekernel(alpha, rho), X, eta, beta, jitter)
     
     # Sampling Distribution.
-    y .~ Bernoulli.(logistic.(f .+ beta))
+    y ~ Product(Bernoulli.(logistic.(f)))
 end;
 
 # For getting quantiles along array dimensions
@@ -82,32 +85,32 @@ function makegrid(xmin, xmax, ymin, ymax, ngrid; return_all=false)
   end
 end;
 
-function gp_predict(postsamps, X, y, nnew; eps=0, prob=true, eps_gp=1e-6)
+function gp_predict(postsamps, X, y, nnew; eps=0, prob=true, jitter=1e-6)
+    # Make grid of prediction locations.
     xmin = minimum(X, dims=1)
     xmax = maximum(X, dims=1)
     Xnew, grid = makegrid(xmin[1]-eps, xmax[1]+eps,
                           xmin[2]-eps, xmax[2]+eps,
                           nnew, return_all=true)
+    
+    # Posterior samples of model parameters.
     alpha = postsamps[:alpha]
     rho = postsamps[:rho]
     beta = postsamps[:beta]
     nsamps = length(alpha)
-    # f = postsamps[:f]
     eta = postsamps[:eta]
         
+    # Predict classification probabilities.
     ps = [let
-            kernel = sqexpkernel(alpha[i], rho[i])
-            kernel += eps_gp * EyeKernel()
-            K = kernelmatrix(kernel, X, obsdim=1)
+            kernel = sekernel(alpha[i], rho[i], jitter)
             gp = GP(beta[i], kernel)
-            # pfx = posterior(gp(X'), f[:, i])
-            f = LinearAlgebra.cholesky(K).L * eta[:, i]
+            f = compute_f(kernel, X, eta[:, i], beta[i])
             pfx = posterior(gp(X'), f)
             logit_p = rand(pfx(Xnew'))
             prob ? logistic.(logit_p) : logit_p
-         end for i in ProgressBar(1:nsamps)];
-    ps = hcat(ps...)
-    return ps, Xnew, grid
+         end for i in ProgressBar(1:nsamps)]
+
+    return hcat(ps...), Xnew, grid
 end;
 
 function plot_kernel_params(post_samples, kernel_params; bins=nothing, figsize=(8,3))
@@ -123,11 +126,11 @@ end;
 
 function plot_uq(postsamps, X, y, algo;
                  nnew=100, eps=0.2, figsize=(10, 8),
-                 kernel_params=nothing, eps_gp=1e-6,
+                 kernel_params=nothing, jitter=1e-6,
                  color_res=100, color_res_sd=100, return_stuff=false,
                  data_edgecolors=nothing, vmin_sd=0, vmax_sd=nothing, prob=true)
     nsamps = postsamps[:alpha]
-    ps, Xnew, grid = gp_predict(postsamps, X, y, nnew, eps=eps, prob=prob, eps_gp=eps_gp)
+    ps, Xnew, grid = gp_predict(postsamps, X, y, nnew, eps=eps, prob=prob, jitter=jitter)
     
     plt.figure(figsize=figsize)
     gs = [[g[i] for g in grid] for i in 1:2]
@@ -158,7 +161,7 @@ function plot_uq(postsamps, X, y, algo;
     plt.title("Posterior Standard Deviation Function ($algo)")
     
     if kernel_params != nothing
-        plot_kernel_params(postsamps, kernel_params)
+        plot_kernel_params(postsamps, kernel_params, bins=30)
     end
    
     if return_stuff
@@ -191,21 +194,17 @@ kernel_params = [:alpha, :rho, :beta];
 # Fit via ADVI.
 Random.seed!(7)
 
-# initialize variational distribution (optional)
-q0 = Variational.meanfield(m)
-
 # NOTE: ADVI(num_elbo_samples, max_iters)
 
 # Compile
-@time q = vi(m, ADVI(1, 1), q0, optimizer=Flux.ADAM(1e-1));
+@time q = vi(m, ADVI(1, 1))
 
 # RUN
-@time q = vi(m, ADVI(1, 1000))#, q0, optimizer=Flux.ADAM(1e-1));
+@time q = vi(m, ADVI(1, 1000))
  
 # Get posterior samples
 extract_gp = make_extractor(m, q, nsamples=500)
 advi_samples = Dict{Symbol, Any}(sym => vec(extract_gp(sym)) for sym in kernel_params)
-# advi_samples[:f] = extract_gp(:f);
 advi_samples[:eta] = extract_gp(:eta);
 
 plot_uq(advi_samples, X, y, "ADVI", eps=0.5,
@@ -229,7 +228,6 @@ nsamples = 500
 hmc_samples = Dict{Symbol, Any}([
     sym => vec(group(hmc_chain, sym).value.data)[end-nsamples+1:end]
 for sym in kernel_params])
-# hmc_samples[:f] = Matrix(group(hmc_chain, :f).value.data[end-nsamples+1:end, :, 1]');
 hmc_samples[:eta] = Matrix(group(hmc_chain, :eta).value.data[end-nsamples+1:end, :, 1]');
 
 # Plot HMC
@@ -256,10 +254,9 @@ nsamples = 500
 
 # Get posterior samples
 nuts_samples = Dict{Symbol, Any}([
-    sym => vec(group(nuts_chain, sym).value.data)[end-nsamples+1:end]
+    sym => vec(group(nuts_chain, sym).value.data)
 for sym in kernel_params])
-# nuts_samples[:f] = Matrix(group(nuts_chain, :f).value.data[end-nsamples+1:end, :, 1]');
-nuts_samples[:eta] = Matrix(group(nuts_chain, :eta).value.data[end-nsamples+1:end, :, 1]');
+nuts_samples[:eta] = Matrix(group(nuts_chain, :eta).value.data[:, :, 1]');
 
 # Plot NUTS
 plot_uq(nuts_samples, X, y, "NUTS", eps=0.5,

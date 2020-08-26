@@ -1,13 +1,41 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# <a href="https://colab.research.google.com/github/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-classify/notebooks/gp_classify_numpyro.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
-
 # In[1]:
 
 
 get_ipython().system('pip install numpyro;')
 
+
+# ## GP for binary classification (in Numpyro)
+# 
+# $$
+# \begin{eqnarray}
+# y_n \mid p_n &\sim& \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
+# \text{logit}(\mathbf{p}) &=& \mathbf{L} \cdot \boldsymbol{\eta} + \beta, \text{ where }
+# \mathbf{L} = \text{cholesky}(\mathbf{K}) \\
+# \eta_n &\sim& \text{Normal(0, 1)}, \text{ for } n=1,\dots,N \\
+# \beta &\sim& \text{Normal(0, 1)} \\
+# \alpha &\sim& \text{LogNormal}(0, 1) \\
+# \rho &\sim& \text{LogNormal}(0, 1) \\
+# \end{eqnarray}
+# $$
+# 
+# Note: 
+# - $\mathbf{K}$ is an $N\times N$ covariance matrix where
+#   $K_{n,m} = \alpha^2\exp\left(-{\left\lVert\mathbf{x}_n - \mathbf{x}_m\right\rVert}^2_2\big/\rho^{2}\right)$.
+# - Each $\mathbf{x}_n$ is an observed 2-dimensional locations, for $n=1,\dots,N$.
+# - The model above is the same as the more explicit model below. But the model above mixes slowly with ADVI, HMC, and NUTS; while the model above mixes much more quickly.
+# 
+# $$
+# \begin{eqnarray}
+# y_n \mid p_n &\sim& \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
+# \text{logit}(\mathbf{p}) &\sim& \text{MvNormal}(\beta \cdot \mathbf{1}_N, K) \\
+# \beta &\sim& \text{Normal(0, 1)} \\
+# \alpha &\sim& \text{LogNormal}(0, 1) \\
+# \rho &\sim& \text{LogNormal}(1, 1) \\
+# \end{eqnarray}
+# $$
 
 # In[1]:
 
