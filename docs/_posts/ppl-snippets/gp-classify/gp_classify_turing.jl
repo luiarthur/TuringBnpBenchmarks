@@ -12,27 +12,32 @@ import Random
 import LinearAlgebra
 
 # Define a kernel.
-function sqexpkernel(alpha::Real, rho::Real)
-    alpha^2 * transform(SqExponentialKernel(), 1/(rho*sqrt(2)))
+function sekernel(alpha, rho)
+  kernel = alpha^2 * transform(SEKernel(), invsqrt2/rho)
+  return kernel
 end
 
-@model function GPClassify(y, X, eps=1e-6)
+function compute_f(kernel, X, eta, beta=0, jitter=0)
+  K = kernelmatrix(kernel, X, obsdim=1)
+  K += LinearAlgebra.I * jitter
+  return LinearAlgebra.cholesky(K).L * eta .+ beta
+end
+
+@model function GPClassify(y, X, jitter=1e-6)
     # Priors.
     alpha ~ LogNormal(0, 1)
     rho ~ LogNormal(0, 1)
     beta ~ Normal(0, 1)  # intercept.
-
-    # Realized covariance function
-    kernel = sqexpkernel(alpha, rho) + eps * EyeKernel()
-    K = kernelmatrix(kernel, X, obsdim=1)
-    
-    # Latent function.
     eta ~ filldist(Normal(0, 1), length(y))
-    f = LinearAlgebra.cholesky(K).L * eta
+
+    # Latent GP
+    kernel = sekernel(alpha, rho)
+    f = compute_f(sekernel(alpha, rho), X, eta, beta, jitter)
     
     # Sampling Distribution.
-    y .~ Bernoulli.(logistic.(f .+ beta))
+    y ~ arraydist(Bernoulli.(logistic.(f)))
 end;
+
 
 # To extract parameters from trained variational distribution
 # (surrogate posterior).
