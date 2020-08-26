@@ -12,14 +12,10 @@ import Random
 import LinearAlgebra
 
 # Define a kernel.
-function sekernel(alpha, rho)
-  kernel = alpha^2 * transform(SEKernel(), invsqrt2/rho)
-  return kernel
-end
+sekernel(alpha, rho) = alpha^2 * transform(SEKernel(), invsqrt2/rho)
 
 function compute_f(kernel, X, eta, beta=0, jitter=0)
-  K = kernelmatrix(kernel, X, obsdim=1)
-  K += LinearAlgebra.I * jitter
+  K = kernelmatrix(kernel, X, obsdim=1) + LinearAlgebra.I * jitter
   return LinearAlgebra.cholesky(K).L * eta .+ beta
 end
 
