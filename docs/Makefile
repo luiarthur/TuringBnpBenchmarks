@@ -6,7 +6,7 @@ clean:
 	rm -rf _site
 
 serve:
-	bundle exec jekyll serve --incremental
+	bundle exec jekyll serve --incremental --livereload
 
 serve_draft:
 	bundle exec jekyll serve --incremental --drafts
