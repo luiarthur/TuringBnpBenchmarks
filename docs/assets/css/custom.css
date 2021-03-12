@@ -78,9 +78,6 @@ code {
   color: #c7254e;
   background-color: #f9f2f4;
 }
-.ppl-btn {
-  margin: 2px;
-}
 figure.highlight pre {
   border-radius: calc(var(--main-font-size) * 0.5);
 }

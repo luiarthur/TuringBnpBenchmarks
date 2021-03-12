@@ -196,16 +196,18 @@ $(document).ready(function(){
 
     // Create buttons.
     $('#ppl-buttons').append(`
-      <button type="button" class="ppl-btn btn btn-default btn-secondary ${ppl_lower}">${ppl}</button>
+      <button type="button" class="btn btn-outline-primary ${ppl_lower} hide">
+        ${ppl}
+      </button>
     `);
 
     // Show Turing example by default.
-    $("#turing").attr("class", `ppl-code show`);
+    $("#turing").removeClass("hide");
 
     // Button callbacks. 
     $(`button.${ppl_lower}`).click(() => {
-      $(".ppl-code").attr("class", `ppl-code hide`);
-      $(`#${ppl_lower}`).attr("class", `ppl-code show`);
+      $(".ppl-code").addClass("hide");
+      $(`#${ppl_lower}`).removeClass("hide");
     });
   }
 });
