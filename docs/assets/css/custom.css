@@ -1,0 +1,86 @@
+:root {
+  --main-font-family: 'Fira Sans', sans-serif;
+  --main-font-weight: 300;
+  --main-bold-font-weight: 400;
+  --main-font-size: 26px;
+}
+div#disqus_thread {
+  margin-top: 100px;
+}
+/* font stuff */
+body {
+  font-family: var(--main-font-family);
+  color: black;
+}
+h1, h2, h3, h4, h5, h6 {
+  color: black;
+  font-family: var(--main-font-family);
+  font-weight: var(--main-bold-font-weight);
+  padding-bottom: calc(var(--main-font-size) * 0.4);
+  padding-top: calc(var(--main-font-size) * 0.4);
+}
+h1 { font-size: calc(var(--main-font-size) / .50); }
+h2 { font-size: calc(var(--main-font-size) / .60); }
+h3 { font-size: calc(var(--main-font-size) / .70); }
+h4 { font-size: calc(var(--main-font-size) / .80); }
+h5 { font-size: calc(var(--main-font-size) / .90); }
+h6 { font-size: calc(var(--main-font-size) / .95); }
+strong { font-weight: var(--main-bold-font-weight); }
+body {
+  font-size: var(--main-font-size);
+  font-weight: var(--main-font-weight);
+}
+footer {
+  font-size: calc(var(--main-font-size) * 0.7);
+}
+pre.highlight {
+  padding: calc(var(--main-font-size) * 0.4);
+  border-radius: calc(var(--main-font-size) * 0.4);
+}
+code {
+  color: #c7254e;
+  background-color: #f9f2f4;
+}
+/* Sortable tables */
+table.sortable thead {
+    background-color:#eee;
+    color:#666666;
+    font-weight: bold;
+    cursor: default;
+}
+img.center {
+  max-width: 80%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* syntax highlighting */
+.highlight * table td {
+  padding: 0px;
+}
+.highlight * td pre{
+  border: 0px;
+}
+.ppl-code.hide {
+  display: none;
+}
+div.ppl-code {
+  font-size: calc(var(--main-font-size) * 0.9);
+}
+.ppl-code pre {
+  padding: calc(var(--main-font-size) * 0.4);
+}
+pre.highlight {
+  padding: calc(var(--main-font-size) * 0.4);
+  border-radius: calc(var(--main-font-size) * 0.4);
+}
+code {
+  color: #c7254e;
+  background-color: #f9f2f4;
+}
+.ppl-btn {
+  margin: 2px;
+}
+figure.highlight pre {
+  border-radius: calc(var(--main-font-size) * 0.5);
+}

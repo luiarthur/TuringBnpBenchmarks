@@ -1,0 +1,24 @@
+.katex {
+  font-size: calc(var(--main-font-size));
+}
+.small-float-captions, .small-float-captions .katex {
+  font-size: var(--small-float-captions-size);
+}
+.float-captions, .float-captions .katex {
+  font-size: var(--float-captions-size);
+}
+.katex .base, .katex .mathnormal {
+  font-family: var(--main-font-family);
+  font-weight: var(--main-font-weight);
+}
+.katex .accent-body .mord, .katex .mrel, .katex .mbin, .katex .mopen,
+.katex .mclose {
+  font-family: 'Katex_Main';
+}
+.katex .mord.boldsymbol {
+  font-family: var(--main-font-family);
+  font-weight: var(--main-bold-font-weight);
+  font-style: italic;
+}
+
+/* .mop, .mord { } */

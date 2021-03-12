@@ -6,7 +6,6 @@ math: on
 nburl: "https://github.com/luiarthur/TuringBnpBenchmarks/blob/master/src/gp-classify/notebooks/"
 ppls: "Turing,STAN,TFP,Pyro,Numpyro"
 sorttable: on
-date_last_modified: "24 August, 2020."
 ---
 
 <!--
@@ -17,7 +16,8 @@ https://jekyllrb.com/tutorials/csv-to-table/
 
 # {{page.title}}
 
-Last updated: {{ page.date_last_modified }}
+
+This page was last updated on {{ "now" | date: "%d %b, %Y" }}.
 
 ***
 
@@ -41,24 +41,25 @@ GP binary classifier for this task.
 
 ## Model
 The model is specified as follows:
+
 $$
-\begin{eqnarray}
-y_n \mid p_n &\sim& \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
-\text{logit}(\mathbf{p}) \mid \beta, \alpha, \rho &\sim&
-\text{MvNormal}(\beta \cdot \mathbf{1}_N, \mathbf{K_{\alpha, \rho}}) \\
-\beta &\sim& \text{Normal(0, 1)} \\
-\alpha &\sim& \text{LogNormal}(0, 1) \\
-\rho &\sim& \text{LogNormal}(0, 1) \\
-\end{eqnarray}
+\begin{aligned}
+y_n \mid p_n &\sim \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N &(1)\\
+\text{logit}(\bm{p}) \mid \beta, \alpha, \rho &\sim
+\text{MvNormal}(\beta \cdot \bm{1}_N, \bm{K}_{\alpha, \rho}) &(2) \\
+\beta &\sim \text{Normal(0, 1)} &(3) \\
+\alpha &\sim \text{LogNormal}(0, 1) &(4)\\
+\rho &\sim \text{LogNormal}(0, 1) &(5)
+\end{aligned}
 $$
 
-We use a Bernoulli likelihood (1) as the response is binary. We model the logit
+We use a Bernoulli likelihood as the response is binary. We model the logit
 of the probabilities in the likelihood with a GP, with a $\beta$-mean mean
 function and squared-exponential covariance function, parameterized by
 amplitude $\alpha$ and range $\rho$, and with 2-dimensional predictors $x_i$.
-The finite-dimensional distribution can be expressed as (2), where
-$K_{i,j}=\alpha^2 \cdot \exp\bc{-\norm{\mathbf{x}_i -
-\mathbf{x}_j}^2_2/2\rho^2}$. The model specification is completed by placing
+The finite-dimensional distribution can be expressed as in (2), where
+$K_{i,j}=\alpha^2 \cdot \exp\bc{-\norm{\bm{x}_i -
+\bm{x}_j}^2_2/2\rho^2}$. The model specification is completed by placing
 moderately informative priors on mean and covariance function parameters. For
 this (differentiable) model, full Bayesian inference can be done using generic
 inference algorithms (e.g.ADVI, HMC, and NUTS).
@@ -73,16 +74,16 @@ Note the introduction of auxiliary variables $\boldsymbol\eta$ to achieve this
 purpose.
 
 $$
-\begin{eqnarray}
-y_n \mid p_n &\sim& \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
-\text{logit}(\mathbf{p}) &=& \mathbf{L} \cdot \boldsymbol{\eta} + \beta\cdot\mathbf{1}_N,
+\begin{aligned}
+y_n \mid p_n &\sim \text{Bernoulli}(p_n), \text{ for } n=1,\dots, N \\
+\text{logit}(\bm{p}) &= \bm{L} \cdot \boldsymbol{\eta} + \beta\cdot\bm{1}_N,
 \text{ where }
-\mathbf{L} = \text{cholesky}(\mathbf{K}) \\
-\eta_n &\sim& \text{Normal(0, 1)}, \text{ for } n=1,\dots,N \\
-\beta &\sim& \text{Normal(0, 1)} \\
-\alpha &\sim& \text{LogNormal}(0, 1) \\
-\rho &\sim& \text{LogNormal}(0, 1) \\
-\end{eqnarray}
+\bm{L} = \text{cholesky}(\bm{K}) \\
+\eta_n &\sim \text{Normal(0, 1)}, \text{ for } n=1,\dots,N \\
+\beta &\sim \text{Normal(0, 1)} \\
+\alpha &\sim \text{LogNormal}(0, 1) \\
+\rho &\sim \text{LogNormal}(0, 1)
+\end{aligned}
 $$
 
 ## PPL Comparisons
@@ -132,7 +133,7 @@ Here are some algorithm settings used for inference:
 
 ### Results
 Below, the top left figure is the posterior predictive mean function
-$\mathbf{p}$ over a fine location grid. The data is included for reference.
+$\bm{p}$ over a fine location grid. The data is included for reference.
 Note that where data-response is predominantly 0 (blue), the probability of
 predicting 0 is high (indicated by low probability of predicting 1 at those
 locations). Similarly, where data-response is predominantly 1 (red), the
@@ -195,7 +196,7 @@ $(document).ready(function(){
 
     // Create buttons.
     $('#ppl-buttons').append(`
-      <button type="button" class="btn btn-default ${ppl_lower}">${ppl}</button>
+      <button type="button" class="ppl-btn btn btn-default btn-secondary ${ppl_lower}">${ppl}</button>
     `);
 
     // Show Turing example by default.

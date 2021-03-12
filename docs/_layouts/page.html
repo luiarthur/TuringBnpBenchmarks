@@ -2,22 +2,21 @@
 layout: default
 ---
 
-<header class="intro-header" style="background-color:{{page.header-color}}; height:60px; margin:0">
-</header>
+<!--header class="intro-header" style="background-color:{{page.header-color}}; height:60px; margin:0">
+</header-->
 
 <!-- Main Content -->
-<div class="container">
-	<div class="row">
-		<div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
-			{{ content }}
-      <hr>
-      {% if page.path contains '_posts' %}{% include pager.html %}{% endif %}
-      <div id="disqus_thread"></div>
-      <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>      
-		</div>
+<div class="row">
+	<div class="col-lg-6 offset-lg-3 col-md-10 offset-md-1">
+		{{ content }}
+    <hr>
+    {% include pager.html %}
+    <div id="disqus_thread"></div>
+    {% include footer.html %}
+    <noscript>
+      Please enable JavaScript to view the 
+      <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a>
+    </noscript>      
 	</div>
 </div>
-
 <hr>
-
-

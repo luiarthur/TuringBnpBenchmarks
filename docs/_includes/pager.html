@@ -1,38 +1,17 @@
-<!--See:
-https://shopify.github.io/liquid/basics/operators/
-https://gist.github.com/JJediny/a466eed62cee30ad45e2
--->
-{% assign prev_page = nil %}
-{% assign next_page = nil %}
-
-{% for post in site.posts %}
-    {% if post.url == page.url %}
-        <!-- Assign next page if not last page. -->
-        {% if forloop.first == false %}
-            {% assign i = forloop.index0 | minus:1 %}
-            {% assign next_page = site.posts[i] %}
-        {% endif %}
-
-        <!-- Assign previous page if not first page. -->
-        {% if forloop.last == false %}
-            {% assign i = forloop.index0 | plus:1 %}
-            {% assign prev_page = site.posts[i] %}
-        {% endif %}
-        
-        {% break %}
+<div class="pager justify-content-between d-flex">
+    {% if page.previous.url %}
+    <div class="previous btn btn-secondary btn-custom">
+        <a href="{{ page.previous.url | prepend: site.baseurl | replace: '//', '/' }}"
+           data-toggle="tooltip" data-placement="top"
+          title="{{page.previous.title}}">&larr; Previous</a>
+    </div>
+    {% else %}
+    <div></div>
     {% endif %}
-{% endfor %}
-
-<ul class="pager">
-    {% if prev_page %}
-    <li class="previous">
-        <a href="{{ prev_page.url | prepend: site.baseurl | replace: '//', '/' }}" data-toggle="tooltip" data-placement="top" title="{{prev_page.title}}">&larr; Previous Post</a>
-    </li>
+    {% if page.next.url %}
+    <div class="next btn btn-secondary btn-custom">
+        <a href="{{ page.next.url | prepend: site.baseurl | replace: '//', '/' }}"
+          data-toggle="tooltip" data-placement="top" title="{{page.next.title}}">Next &rarr;</a>
+    </div>
     {% endif %}
-
-    {% if next_page %}
-    <li class="next">
-        <a href="{{ next_page.url | prepend: site.baseurl | replace: '//', '/' }}" data-toggle="tooltip" data-placement="top" title="{{next_page.title}}">Next Post &rarr;</a>
-    </li>
-    {% endif %}
-</ul>
+</div>

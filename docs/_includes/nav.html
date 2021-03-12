@@ -1,33 +1,32 @@
 <!-- Navigation -->
-<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark navbar-custom">
     <div class="container-fluid">
-        <!-- Brand and toggle get grouped for better mobile display -->
-        <div class="navbar-header page-scroll">
-            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
-                <span class="sr-only">Toggle navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-            <a class="navbar-brand" href="{{site.github_repo}}">{{ site.title }}</a>
-        </div>
+      <!-- Brand and toggle get grouped for better mobile display -->
+      <a class="navbar-brand" href="{{site.github_repo}}">{{ site.title }}</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+        data-bs-target="#pageNavBar"
+        aria-controls="pageNavBar" aria-expanded="false"
+        aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
 
-        <!-- Collect the nav links, forms, and other content for toggling -->
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-            <ul class="nav navbar-nav navbar-right">
-                <li>
-                    <a href="{{ site.baseurl }}/">Home</a>
-                </li>
-                {% for page in site.pages %}{% if page.title %}
-                {% if page.inNav %}
-                <li>
-                    <a href="{{ page.url | prepend: site.baseurl }}">{{ page.title }}</a>
-                </li>
-                {% endif %}
-                {% endif %}{% endfor %}
-            </ul>
-        </div>
-        <!-- /.navbar-collapse -->
+      <!-- Collect the nav links, forms, and other content for toggling -->
+      <div class="collapse navbar-collapse" id="pageNavBar">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+              <a class="nav-link" aria-current="page" href="{{ site.baseurl }}/">Home</a>
+          </li>
+          {% for page in site.pages %}
+          {% if page.title %}
+          {% if page.inNav %}
+          <li class="nav-item">
+              <a class="nav-link" href="{{ page.url | prepend: site.baseurl }}">{{ page.title }}</a>
+          </li>
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
     </div>
     <!-- /.container -->
 </nav>

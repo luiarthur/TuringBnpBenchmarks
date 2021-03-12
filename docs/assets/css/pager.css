@@ -1,0 +1,7 @@
+.pager {
+  font-size: calc(var(--main-font-size) * 0.8);
+}
+.pager .btn-custom * {
+  color: white;
+  text-decoration: none;
+}

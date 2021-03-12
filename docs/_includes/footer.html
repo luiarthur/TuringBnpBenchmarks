@@ -1,19 +1,15 @@
+<script type="module" src='{{ "/assets/js/main.js" | prepend: site.baseurl }}'></script>
+
 <!-- FOOTER  -->
 <div id="footer_wrap" class="outer">
-  <small><small>
+  <center>
   <footer class="inner">
     {% if site.github.is_project_page %}
     <p class="copyright">
-      This site is maintained by 
-        <a href="{{ site.github.owner_url }}">
-          {{ site.author }}
-          <!-- OR:
-            {{ site.github.owner_name }}
-          -->
-        </a>
+      This site is maintained by <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a>.
     </p>
     {% endif %}
-    <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+    <p>Published with <a href="https://pages.github.com">GitHub Pages</a>.</p>
   </footer>
-  </small></small>
+  </center>
 </div>

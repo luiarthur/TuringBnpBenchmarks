@@ -1,6 +1,6 @@
-.PHONY: clean serve clean_serve
+.PHONY: clean serve clean-serve
 
-all: clean_serve
+all: clean-serve
 
 clean:
 	rm -rf _site
@@ -11,9 +11,9 @@ serve:
 serve_draft:
 	bundle exec jekyll serve --incremental --drafts
 
-clean_serve: clean serve
+clean-serve: clean serve
 
-clean_serve_draft: clean serve_draft
+clean-serve-draft: clean serve_draft
 
 update-gems:
 	rm Gemfile.lock

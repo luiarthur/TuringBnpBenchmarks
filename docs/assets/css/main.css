@@ -1,0 +1,17 @@
+/* Google fonts */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;1,300;1,400&display=swap');
+
+/* Bootstrap */
+@import url("https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css");
+
+/* Katex */
+@import url("https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css");
+
+/* Code syntax highlighting */
+@import url("syntax-highlight.css");
+
+/* Custom styles */
+@import url("custom.css");
+@import url("katex-custom.css");
+@import url("navbar-custom.css");
+@import url("pager.css");
